@@ -1,0 +1,351 @@
+{
+  "version": "1.0.0",
+  "description": "ATA Azure-to-AWS mapping catalog — MVP starter set",
+  "mappings": [
+    {
+      "azureType": "microsoft.compute/virtualmachines",
+      "azureKind": null,
+      "azureSku": null,
+      "category": "Compute",
+      "awsServices": [{ "service": "Amazon EC2", "category": "Compute" }],
+      "confidence": "High",
+      "rationale": "Direct IaaS VM equivalent",
+      "migrationNotes": "Review instance type mapping; consider Graviton for cost optimization",
+      "alternatives": ["AWS Lambda (if refactoring to serverless)", "ECS on Fargate (if containerizing)"]
+    },
+    {
+      "azureType": "microsoft.compute/virtualmachinescalesets",
+      "azureKind": null,
+      "azureSku": null,
+      "category": "Compute",
+      "awsServices": [
+        { "service": "EC2 Auto Scaling", "category": "Compute" },
+        { "service": "EC2 Launch Template", "category": "Compute" }
+      ],
+      "confidence": "High",
+      "rationale": "VMSS maps to ASG + Launch Template pattern for elastic compute",
+      "migrationNotes": "Configure scaling policies; review health check settings",
+      "alternatives": ["ECS Service Auto Scaling (if containerizing)"]
+    },
+    {
+      "azureType": "microsoft.web/sites",
+      "azureKind": null,
+      "azureSku": null,
+      "category": "Compute",
+      "awsServices": [{ "service": "AWS App Runner", "category": "Compute" }],
+      "confidence": "Medium",
+      "rationale": "App Service web apps map to App Runner for managed web hosting; Elastic Beanstalk is also viable",
+      "migrationNotes": "Review deployment model; App Runner is simpler but less configurable than Beanstalk",
+      "alternatives": ["AWS Elastic Beanstalk", "Amazon ECS on Fargate"]
+    },
+    {
+      "azureType": "microsoft.web/sites",
+      "azureKind": "functionapp",
+      "azureSku": null,
+      "category": "Serverless",
+      "awsServices": [{ "service": "AWS Lambda", "category": "Serverless" }],
+      "confidence": "High",
+      "rationale": "Azure Functions and Lambda are direct serverless function equivalents",
+      "migrationNotes": "Review trigger types; map bindings to AWS event sources (API Gateway, SQS, EventBridge)",
+      "alternatives": ["AWS App Runner (for always-on functions)"]
+    },
+    {
+      "azureType": "microsoft.containerservice/managedclusters",
+      "azureKind": null,
+      "azureSku": null,
+      "category": "Containers",
+      "awsServices": [{ "service": "Amazon EKS", "category": "Containers" }],
+      "confidence": "High",
+      "rationale": "AKS and EKS are both managed Kubernetes services",
+      "migrationNotes": "Review node pool config, networking (VPC CNI), and IAM for service accounts (IRSA)",
+      "alternatives": ["Amazon ECS (if simplifying away from K8s)"]
+    },
+    {
+      "azureType": "microsoft.containerregistry/registries",
+      "azureKind": null,
+      "azureSku": null,
+      "category": "Containers",
+      "awsServices": [{ "service": "Amazon ECR", "category": "Containers" }],
+      "confidence": "High",
+      "rationale": "Direct container registry equivalent",
+      "migrationNotes": "Migrate images; configure lifecycle policies",
+      "alternatives": []
+    },
+    {
+      "azureType": "microsoft.storage/storageaccounts",
+      "azureKind": "blobstorage",
+      "azureSku": null,
+      "category": "Storage",
+      "awsServices": [{ "service": "Amazon S3", "category": "Storage" }],
+      "confidence": "High",
+      "rationale": "Azure Blob Storage and S3 are direct object storage equivalents",
+      "migrationNotes": "Map access tiers (Hot/Cool/Archive → S3 Standard/IA/Glacier); review lifecycle rules",
+      "alternatives": []
+    },
+    {
+      "azureType": "microsoft.storage/storageaccounts",
+      "azureKind": "storagev2",
+      "azureSku": null,
+      "category": "Storage",
+      "awsServices": [{ "service": "Amazon S3", "category": "Storage" }],
+      "confidence": "High",
+      "rationale": "General-purpose v2 storage accounts primarily use blob; maps to S3",
+      "migrationNotes": "If using File shares, consider Amazon EFS; if using Table/Queue, see DynamoDB/SQS",
+      "alternatives": ["Amazon EFS (for file shares)", "Amazon SQS (for queues)", "Amazon DynamoDB (for table storage)"]
+    },
+    {
+      "azureType": "microsoft.storage/storageaccounts",
+      "azureKind": null,
+      "azureSku": null,
+      "category": "Storage",
+      "awsServices": [{ "service": "Amazon S3", "category": "Storage" }],
+      "confidence": "Medium",
+      "rationale": "Storage account without specific kind defaults to S3 mapping; actual usage may vary",
+      "migrationNotes": "Inspect actual usage (blob/file/queue/table) to refine mapping",
+      "alternatives": ["Amazon EFS", "Amazon SQS", "Amazon DynamoDB"]
+    },
+    {
+      "azureType": "microsoft.compute/disks",
+      "azureKind": null,
+      "azureSku": null,
+      "category": "Storage",
+      "awsServices": [{ "service": "Amazon EBS", "category": "Storage" }],
+      "confidence": "High",
+      "rationale": "Managed disks map directly to EBS volumes",
+      "migrationNotes": "Map disk types (Premium SSD → gp3/io2, Standard HDD → st1/sc1)",
+      "alternatives": []
+    },
+    {
+      "azureType": "microsoft.servicebus/namespaces",
+      "azureKind": null,
+      "azureSku": null,
+      "category": "Messaging",
+      "awsServices": [
+        { "service": "Amazon SQS", "category": "Messaging" },
+        { "service": "Amazon SNS", "category": "Messaging" }
+      ],
+      "confidence": "Medium",
+      "rationale": "Service Bus queues → SQS, topics → SNS; combined pattern for pub/sub + queuing",
+      "migrationNotes": "If using sessions or AMQP, consider Amazon MQ instead; review dead-letter queue config",
+      "alternatives": ["Amazon MQ (for JMS/AMQP compatibility)"]
+    },
+    {
+      "azureType": "microsoft.eventhub/namespaces",
+      "azureKind": null,
+      "azureSku": null,
+      "category": "Messaging",
+      "awsServices": [{ "service": "Amazon Kinesis Data Streams", "category": "Messaging" }],
+      "confidence": "High",
+      "rationale": "Event Hubs and Kinesis are both high-throughput event streaming services",
+      "migrationNotes": "Map partition count and throughput units; review consumer group patterns",
+      "alternatives": ["Amazon MSK (for Kafka compatibility)"]
+    },
+    {
+      "azureType": "microsoft.eventgrid/topics",
+      "azureKind": null,
+      "azureSku": null,
+      "category": "Messaging",
+      "awsServices": [{ "service": "Amazon EventBridge", "category": "Messaging" }],
+      "confidence": "High",
+      "rationale": "Event Grid and EventBridge are both serverless event routing services",
+      "migrationNotes": "Map event subscriptions to EventBridge rules; review filtering patterns",
+      "alternatives": ["Amazon SNS (for simpler fan-out)"]
+    },
+    {
+      "azureType": "microsoft.network/virtualnetworks",
+      "azureKind": null,
+      "azureSku": null,
+      "category": "Networking",
+      "awsServices": [{ "service": "Amazon VPC", "category": "Networking" }],
+      "confidence": "High",
+      "rationale": "Direct virtual network equivalent",
+      "migrationNotes": "Map subnets, CIDR ranges, and peering connections; review DNS settings",
+      "alternatives": []
+    },
+    {
+      "azureType": "microsoft.network/networksecuritygroups",
+      "azureKind": null,
+      "azureSku": null,
+      "category": "Networking",
+      "awsServices": [{ "service": "VPC Security Groups", "category": "Networking" }],
+      "confidence": "High",
+      "rationale": "NSGs map to Security Groups; note AWS also has NACLs for subnet-level filtering",
+      "migrationNotes": "NSG rules → SG rules; consider NACLs for subnet-level deny rules (NSG supports deny, SG does not)",
+      "alternatives": ["Network ACLs (for subnet-level stateless filtering)"]
+    },
+    {
+      "azureType": "microsoft.network/applicationgateways",
+      "azureKind": null,
+      "azureSku": null,
+      "category": "Networking",
+      "awsServices": [
+        { "service": "Application Load Balancer", "category": "Networking" },
+        { "service": "AWS WAF", "category": "Security" }
+      ],
+      "confidence": "Medium",
+      "rationale": "App Gateway combines L7 LB + WAF; AWS splits these into ALB + WAF",
+      "migrationNotes": "Configure ALB listeners/rules; attach WAF WebACL if using WAF features",
+      "alternatives": ["Amazon CloudFront + WAF (for CDN + WAF pattern)"]
+    },
+    {
+      "azureType": "microsoft.network/loadbalancers",
+      "azureKind": null,
+      "azureSku": null,
+      "category": "Networking",
+      "awsServices": [{ "service": "Network Load Balancer", "category": "Networking" }],
+      "confidence": "High",
+      "rationale": "Azure LB (Standard) maps to NLB for L4 load balancing",
+      "migrationNotes": "Review health check config and cross-zone settings",
+      "alternatives": ["Application Load Balancer (if L7 features needed)"]
+    },
+    {
+      "azureType": "microsoft.network/vpngateways",
+      "azureKind": null,
+      "azureSku": null,
+      "category": "Networking",
+      "awsServices": [{ "service": "AWS Site-to-Site VPN", "category": "Networking" }],
+      "confidence": "High",
+      "rationale": "Direct VPN gateway equivalent for site-to-site connectivity",
+      "migrationNotes": "Configure Customer Gateway + Virtual Private Gateway; review BGP settings",
+      "alternatives": ["AWS Client VPN (for point-to-site)"]
+    },
+    {
+      "azureType": "microsoft.network/expressroutecircuits",
+      "azureKind": null,
+      "azureSku": null,
+      "category": "Networking",
+      "awsServices": [{ "service": "AWS Direct Connect", "category": "Networking" }],
+      "confidence": "High",
+      "rationale": "ExpressRoute and Direct Connect are both dedicated private connectivity services",
+      "migrationNotes": "Coordinate with connectivity provider; review bandwidth and redundancy requirements",
+      "alternatives": ["AWS Site-to-Site VPN (as interim or backup)"]
+    },
+    {
+      "azureType": "microsoft.network/privateendpoints",
+      "azureKind": null,
+      "azureSku": null,
+      "category": "Networking",
+      "awsServices": [{ "service": "AWS PrivateLink", "category": "Networking" }],
+      "confidence": "High",
+      "rationale": "Private Endpoints and PrivateLink both provide private connectivity to services",
+      "migrationNotes": "Configure VPC endpoint for each service; review DNS resolution (Route 53 Resolver)",
+      "alternatives": []
+    },
+    {
+      "azureType": "microsoft.sql/servers",
+      "azureKind": null,
+      "azureSku": null,
+      "category": "Database",
+      "awsServices": [{ "service": "Amazon RDS for SQL Server", "category": "Database" }],
+      "confidence": "High",
+      "rationale": "Azure SQL logical server maps to RDS SQL Server",
+      "migrationNotes": "Review edition/tier mapping; consider Aurora PostgreSQL if open to engine change",
+      "alternatives": ["Amazon Aurora (if migrating engine)"]
+    },
+    {
+      "azureType": "microsoft.sql/servers/databases",
+      "azureKind": null,
+      "azureSku": null,
+      "category": "Database",
+      "awsServices": [{ "service": "Amazon RDS for SQL Server", "category": "Database" }],
+      "confidence": "High",
+      "rationale": "Azure SQL Database maps to RDS SQL Server instance",
+      "migrationNotes": "Use AWS DMS for migration; map DTU/vCore to RDS instance class",
+      "alternatives": ["Amazon Aurora PostgreSQL (if re-platforming)"]
+    },
+    {
+      "azureType": "microsoft.documentdb/databaseaccounts",
+      "azureKind": null,
+      "azureSku": null,
+      "category": "Database",
+      "awsServices": [{ "service": "Amazon DynamoDB", "category": "Database" }],
+      "confidence": "Medium",
+      "rationale": "Cosmos DB (SQL API) maps to DynamoDB; data model differences exist",
+      "migrationNotes": "Review consistency models; Cosmos DB multi-model vs DynamoDB key-value/document",
+      "alternatives": ["Amazon DocumentDB (for MongoDB API compatibility)", "Amazon Keyspaces (for Cassandra API)"]
+    },
+    {
+      "azureType": "microsoft.cache/redis",
+      "azureKind": null,
+      "azureSku": null,
+      "category": "Database",
+      "awsServices": [{ "service": "Amazon ElastiCache for Redis", "category": "Database" }],
+      "confidence": "High",
+      "rationale": "Direct managed Redis equivalent",
+      "migrationNotes": "Map tier/size; review cluster mode and replication settings",
+      "alternatives": ["Amazon MemoryDB for Redis (for durable Redis)"]
+    },
+    {
+      "azureType": "microsoft.dbforpostgresql/flexibleservers",
+      "azureKind": null,
+      "azureSku": null,
+      "category": "Database",
+      "awsServices": [{ "service": "Amazon RDS for PostgreSQL", "category": "Database" }],
+      "confidence": "High",
+      "rationale": "Direct managed PostgreSQL equivalent",
+      "migrationNotes": "Use AWS DMS for migration; consider Aurora PostgreSQL for higher performance",
+      "alternatives": ["Amazon Aurora PostgreSQL"]
+    },
+    {
+      "azureType": "microsoft.dbformysql/flexibleservers",
+      "azureKind": null,
+      "azureSku": null,
+      "category": "Database",
+      "awsServices": [{ "service": "Amazon RDS for MySQL", "category": "Database" }],
+      "confidence": "High",
+      "rationale": "Direct managed MySQL equivalent",
+      "migrationNotes": "Use AWS DMS for migration; consider Aurora MySQL for higher performance",
+      "alternatives": ["Amazon Aurora MySQL"]
+    },
+    {
+      "azureType": "microsoft.keyvault/vaults",
+      "azureKind": null,
+      "azureSku": null,
+      "category": "Security",
+      "awsServices": [
+        { "service": "AWS Secrets Manager", "category": "Security" },
+        { "service": "AWS KMS", "category": "Security" }
+      ],
+      "confidence": "Medium",
+      "rationale": "Key Vault combines secrets + keys + certificates; AWS splits into Secrets Manager (secrets) + KMS (keys) + ACM (certs)",
+      "migrationNotes": "Map secrets → Secrets Manager, encryption keys → KMS, certificates → ACM",
+      "alternatives": ["AWS Systems Manager Parameter Store (for simpler secret storage)"]
+    },
+    {
+      "azureType": "microsoft.insights/components",
+      "azureKind": null,
+      "azureSku": null,
+      "category": "Monitoring",
+      "awsServices": [
+        { "service": "Amazon CloudWatch", "category": "Monitoring" },
+        { "service": "AWS X-Ray", "category": "Monitoring" }
+      ],
+      "confidence": "Medium",
+      "rationale": "Application Insights maps to CloudWatch (metrics/logs) + X-Ray (distributed tracing)",
+      "migrationNotes": "Instrument with CloudWatch SDK and X-Ray SDK; review custom metrics and alerts",
+      "alternatives": ["Amazon Managed Grafana + Prometheus (for open-source observability)"]
+    },
+    {
+      "azureType": "microsoft.operationalinsights/workspaces",
+      "azureKind": null,
+      "azureSku": null,
+      "category": "Monitoring",
+      "awsServices": [{ "service": "Amazon CloudWatch Logs", "category": "Monitoring" }],
+      "confidence": "Medium",
+      "rationale": "Log Analytics workspace maps to CloudWatch Logs for centralized log management",
+      "migrationNotes": "Migrate KQL queries to CloudWatch Logs Insights syntax",
+      "alternatives": ["Amazon OpenSearch Service (for advanced log analytics)"]
+    },
+    {
+      "azureType": "microsoft.cdn/profiles",
+      "azureKind": null,
+      "azureSku": null,
+      "category": "Networking",
+      "awsServices": [{ "service": "Amazon CloudFront", "category": "Networking" }],
+      "confidence": "High",
+      "rationale": "Direct CDN equivalent",
+      "migrationNotes": "Map origins, caching rules, and custom domains; review SSL certificate setup",
+      "alternatives": []
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+/**
+ * Audit event type taxonomy and per-event metadata allowlists.
+ *
+ * All audit events use a CATEGORY_ACTION naming convention.
+ * Metadata allowlists define which fields are permitted for each event type.
+ */
+
+export const AUDIT_EVENT_TYPES = [
+  "AUTH_REGISTER",
+  "AUTH_LOGIN_SUCCESS",
+  "AUTH_LOGIN_FAILURE",
+  "AUTH_LOGOUT",
+  "STUDIO_VALIDATE",
+  "STUDIO_GENERATE_ARTIFACTS",
+  "STUDIO_DOWNLOAD_ZIP",
+  "STUDIO_COPY_SHARE_LINK",
+  "MIGRATION_PROJECT_CREATE",
+  "MIGRATION_PROJECT_DELETE",
+  "MIGRATION_RESOURCE_IMPORT",
+  "MIGRATION_MAPPING_RUN",
+  "MIGRATION_REPORT_EXPORT",
+] as const;
+
+export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
+
+/**
+ * Per-event metadata allowlists.
+ * Only fields listed here are permitted in the metadata for each event type.
+ * Any field not on the allowlist is stripped before persistence.
+ */
+export const METADATA_ALLOWLISTS: Record<AuditEventType, readonly string[]> = {
+  AUTH_REGISTER: ["username"],
+  AUTH_LOGIN_SUCCESS: ["username"],
+  AUTH_LOGIN_FAILURE: ["username", "reason"],
+  AUTH_LOGOUT: [],
+  STUDIO_VALIDATE: ["resourceCount", "errorCount"],
+  STUDIO_GENERATE_ARTIFACTS: ["artifactTypes", "resourceCount"],
+  STUDIO_DOWNLOAD_ZIP: ["artifactCount", "totalSizeBytes"],
+  STUDIO_COPY_SHARE_LINK: ["linkId"],
+  MIGRATION_PROJECT_CREATE: ["projectName"],
+  MIGRATION_PROJECT_DELETE: ["projectName"],
+  MIGRATION_RESOURCE_IMPORT: ["projectId", "resourceCount"],
+  MIGRATION_MAPPING_RUN: ["projectId", "resourceCount"],
+  MIGRATION_REPORT_EXPORT: ["projectId", "format"],
+} as const;
+
+export interface AuditEventInput {
+  userId: string;
+  eventType: AuditEventType;
+  metadata: Record<string, unknown>;
+  ipAddress?: string;
+  userAgent?: string;
+}
+
+/**
+ * Type guard to check if a string is a valid AuditEventType.
+ */
+export function isValidEventType(value: string): value is AuditEventType {
+  return (AUDIT_EVENT_TYPES as readonly string[]).includes(value);
+}

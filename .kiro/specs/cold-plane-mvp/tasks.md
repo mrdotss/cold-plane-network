@@ -1,0 +1,256 @@
+# Implementation Plan: Cold Network Plane MVP
+
+## Overview
+
+This plan implements the Cold Network Plane MVP as a vertical slice: project setup → auth → audit → spec engine → topology → studio UI → export → audit UI → marketing landing page → testing. Each task builds on previous tasks, and checkpoints ensure incremental validation.
+
+## Tasks
+
+- [x] 1. Project setup: route groups, Prisma schema, dependencies
+  - [x] 1.1 Install required dependencies: `prisma`, `@prisma/client`, `bcrypt`, `@types/bcrypt`, `@xyflow/react`, `@dagrejs/dagre`, `jszip`, `lz-string`, `idb`, `react-resizable-panels`, `vitest`, `fast-check`, `@types/lz-string`
+    - Run `npm install` for production deps and `npm install -D` for dev deps
+    - _Requirements: All_
+  - [x] 1.2 Create Prisma schema and generate client
+    - Create `prisma/schema.prisma` with User, Session, AuditEvent models per design
+    - Run `npx prisma generate` and `npx prisma db push`
+    - Create `lib/db/client.ts` with singleton Prisma client (server-only guard)
+    - _Requirements: 1.1, 3.1, 9.1_
+  - [x] 1.3 Restructure app into route groups
+    - Create `app/(marketing)/layout.tsx` — minimal layout, no sidebar, no auth
+    - Move landing page to `app/(marketing)/page.tsx`
+    - Create `app/(app)/layout.tsx` — sidebar + auth guard (placeholder auth check for now)
+    - Move `app/dashboard/page.tsx` to `app/(app)/dashboard/page.tsx`
+    - Create stub pages: `app/(app)/dashboard/studio/page.tsx`, `app/(app)/dashboard/audit/page.tsx`, `app/(app)/dashboard/settings/page.tsx`
+    - Keep `app/login/page.tsx` and `app/signup/page.tsx` outside route groups
+    - _Requirements: 11.1, 13.1, 3.2_
+  - [x] 1.4 Create contract type definitions
+    - Create `lib/contracts/graph-ir.ts` with GraphNode, GraphEdge, GraphIR interfaces
+    - Create `lib/contracts/artifact-manifest.ts` with ArtifactManifest, ArtifactFile interfaces
+    - Create `lib/contracts/index.ts` re-export
+    - _Requirements: 6.1, 6.4, 7.1_
+
+- [x] 2. Implement authentication
+  - [x] 2.1 Implement password utilities
+    - Create `lib/auth/password.ts` with `hashPassword()` (bcrypt, cost ≥ 12) and `verifyPassword()`
+    - _Requirements: 1.1_
+  - [x] 2.2 Write property tests for password utilities
+    - **Property 1: Password hashing produces verifiable hash**
+    - **Validates: Requirements 1.1**
+  - [x] 2.3 Implement session management
+    - Create `lib/auth/session.ts` with `createSession()`, `validateSession()`, `destroySession()`
+    - Session token: crypto.randomBytes(32).toString('hex')
+    - Session TTL: 7 days
+    - _Requirements: 3.1, 1.4, 3.3_
+  - [x] 2.4 Write property test for session token length
+    - **Property 4: Session token minimum length**
+    - **Validates: Requirements 3.1**
+  - [x] 2.5 Implement auth middleware
+    - Create `lib/auth/middleware.ts` with `requireAuth()` that validates session from cookie
+    - _Requirements: 3.2_
+  - [x] 2.6 Implement auth API routes
+    - Create `app/api/auth/register/route.ts` — POST: validate input, hash password, create user, create session, set cookie, log AUTH_REGISTER
+    - Create `app/api/auth/login/route.ts` — POST: verify credentials, create session, set cookie, log AUTH_LOGIN_SUCCESS or AUTH_LOGIN_FAILURE
+    - Create `app/api/auth/logout/route.ts` — POST: destroy session, clear cookie, log AUTH_LOGOUT
+    - Create `app/api/auth/session/route.ts` — GET: validate session, return user info or 401
+    - Implement in-memory rate limiting for login (5 attempts / 15 min per IP)
+    - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 2.5, 3.3, 3.4_
+  - [x] 2.7 Write property test for generic error messages
+    - **Property 5: Generic error message for invalid credentials**
+    - **Validates: Requirements 2.2**
+  - [x] 2.8 Wire auth into route group layouts
+    - Update `app/(app)/layout.tsx` to call `validateSession()` and redirect to `/login` if invalid
+    - Update login/signup forms to call auth API routes and handle responses
+    - _Requirements: 3.2, 11.4_
+
+- [x] 3. Checkpoint — Auth works end-to-end
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 4. Implement audit logging
+  - [x] 4.1 Define audit event types and metadata schemas
+    - Create `lib/audit/events.ts` with `AuditEventType` union type and per-event metadata allowlists
+    - _Requirements: 9.6_
+  - [x] 4.2 Implement audit metadata redaction
+    - Create `lib/audit/redact.ts` with `redactMetadata()` function
+    - Implement denylist stripping (password, secret, token, apiKey, credential, specBody, specContent, artifactContent, terraformCode)
+    - Strip fields with serialized values > 256 chars
+    - Enforce 1KB total size cap with `_truncated: true` marker
+    - _Requirements: 9.2, 9.3, 9.4_
+  - [x] 4.3 Write property tests for audit redaction
+    - **Property 6: Audit metadata denylist stripping**
+    - **Property 7: Audit metadata long field stripping**
+    - **Property 8: Audit metadata size cap with truncation marker**
+    - **Validates: Requirements 9.2, 9.3, 9.4**
+  - [x] 4.4 Implement audit writer and API route
+    - Create `lib/audit/writer.ts` (server-only) with `writeAuditEvent()` — calls redactMetadata then persists via Prisma
+    - Create `lib/audit/client.ts` (client-safe) with `logAuditEvent()` — calls POST /api/audit via fetch
+    - Create `app/api/audit/route.ts` — POST: log event (requires auth), GET: list events paginated (requires auth, user-scoped)
+    - _Requirements: 9.1, 9.5, 9.6, 10.1, 10.2_
+  - [x] 4.5 Write property tests for audit event validation and query
+    - **Property 9: Audit event type validation**
+    - **Property 22: Audit events sorted descending**
+    - **Property 23: Audit events filtered by user**
+    - **Validates: Requirements 9.6, 10.1, 10.2**
+
+- [x] 5. Checkpoint — Audit logging works
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 6. Implement spec engine
+  - [x] 6.1 Define spec schema
+    - Create `lib/spec/schema.ts` with `SpecResource`, `ParsedSpec`, `SpecDiagnostic` types
+    - Define the spec text format (YAML-like or JSON-based DSL for network resources)
+    - _Requirements: 4.2, 5.2_
+  - [x] 6.2 Implement spec parser
+    - Create `lib/spec/parser.ts` with `parseSpec()` — parses raw text into `ParsedSpec`
+    - Handle syntax errors gracefully (return diagnostics, never throw)
+    - _Requirements: 5.1, 5.2_
+  - [x] 6.3 Implement spec validator
+    - Create `lib/spec/validator.ts` with `validateSpec()` — semantic validation producing `SpecDiagnostic[]`
+    - Check: required fields, valid resource types, resolvable references, no duplicate names
+    - _Requirements: 5.2, 5.5_
+  - [x] 6.4 Write property test for valid spec produces zero errors
+    - **Property 10: Valid spec produces zero error diagnostics**
+    - **Validates: Requirements 5.5**
+  - [x] 6.5 Implement graph builder
+    - Create `lib/spec/graph-builder.ts` with `buildGraphIR()` — transforms ParsedSpec into GraphIR
+    - Implement edge resolution: containment → reference → inferred
+    - Assign canonical stable IDs: node = `{type}:{name}`, edge = `{source}:{target}:{relationType}`
+    - Emit info diagnostics for inferred edges
+    - _Requirements: 6.1, 6.2, 6.3, 6.4_
+  - [x] 6.6 Write property tests for graph builder
+    - **Property 11: Graph node count matches resource count**
+    - **Property 12: Inferred edges produce info diagnostics**
+    - **Property 13: Stable ID determinism (idempotence)**
+    - **Validates: Requirements 6.1, 6.2, 6.3, 6.4**
+  - [x] 6.7 Implement artifact generator
+    - Create `lib/spec/generators/terraform.ts` — generates Terraform HCL from parsed spec
+    - Create `lib/spec/generators/index.ts` — orchestrates generation, produces ArtifactManifest
+    - Ensure minimum output: manifest.json, artifacts.json, README.md
+    - _Requirements: 7.1, 7.2_
+  - [x] 6.8 Write property test for artifact manifest minimum files
+    - **Property 16: Artifact manifest minimum files**
+    - **Validates: Requirements 7.2**
+
+- [x] 7. Checkpoint — Spec engine works
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 8. Implement topology rendering
+  - [x] 8.1 Implement dagre layout engine
+    - Create `lib/topology/layout.ts` with `layoutGraph()` — uses dagre for auto-layout
+    - Support TB (top-bottom) and LR (left-right) directions
+    - _Requirements: 6.6_
+  - [x] 8.2 Implement graph IR diffing
+    - Create `lib/topology/utils.ts` with `diffGraphIR()` — compares by stable IDs, returns added/removed/updated
+    - _Requirements: 6.5_
+  - [x] 8.3 Write property tests for graph diffing and layout stability
+    - **Property 14: Graph IR diff correctness**
+    - **Property 15: Layout stability on metadata-only changes**
+    - **Validates: Requirements 6.5, 6.6, 6.7**
+  - [x] 8.4 Define custom React Flow node and edge types
+    - Create `lib/topology/node-types.ts` — custom node component with type-based icon/color
+    - Create `lib/topology/edge-types.ts` — edge styles: containment=dashed, reference=solid, inferred=dotted
+    - _Requirements: 6.8_
+
+- [x] 9. Implement Studio UI
+  - [x] 9.1 Create Studio 3-panel layout
+    - Create `components/studio/StudioLayout.tsx` using `react-resizable-panels`
+    - Three panels: Spec Input (left), Topology Preview (center), Output (right)
+    - _Requirements: 12.1_
+  - [x] 9.2 Implement spec editor and form tabs
+    - Create `components/studio/editor/EditorTabs.tsx` — tab switcher (Editor | Form)
+    - Create `components/studio/editor/SpecEditor.tsx` — textarea-based code editor (CodeMirror deferred to post-MVP)
+    - Create `components/studio/editor/SpecForm.tsx` — structured form for resource entry
+    - Implement bidirectional sync: both tabs read/write the same spec state
+    - Implement IndexedDB persistence for spec content using `idb`
+    - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6_
+  - [x] 9.3 Implement topology canvas and resource list
+    - Create `components/studio/preview/TopologyCanvas.tsx` — React Flow wrapper with pan/zoom/select/fit-to-view
+    - Create `components/studio/preview/ResourceList.tsx` — table with columns: type icon, label, type, group, connection count
+    - Implement debounced parsing pipeline: editor keystroke → debounce → parse → validate → build graph → diff → patch React Flow
+    - Implement cross-highlight: node selection ↔ resource list row ↔ editor scroll
+    - _Requirements: 6.5, 6.6, 6.7, 6.8, 6.9, 6.10, 12.7, 14.1, 14.2_
+  - [x] 9.4 Implement toolbar and output panels
+    - Create `components/studio/preview/PreviewToolbar.tsx` — Validate, Generate, Share, Download buttons with disabled/loading states and tooltips
+    - Create `components/studio/output/OutputTabs.tsx` — tab switcher (Artifacts | Diagnostics)
+    - Create `components/studio/output/DiagnosticsPanel.tsx` — display diagnostics with jump-to-source
+    - Create `components/studio/output/ArtifactViewer.tsx` — read-only file viewer for generated artifacts
+    - _Requirements: 5.3, 5.4, 5.6, 7.3, 12.2, 12.3, 12.4, 12.5, 12.6_
+  - [x] 9.5 Wire Studio page
+    - Create `app/(app)/dashboard/studio/page.tsx` — compose StudioLayout with all sub-components
+    - Connect toolbar actions: Validate → parse+validate+audit, Generate → generate+audit, Share → encode+clipboard+audit, Download → zip+download+audit
+    - _Requirements: 4.1, 5.6, 7.4, 8.4, 8.8_
+
+- [x] 10. Implement export features
+  - [x] 10.1 Implement ZIP download
+    - Use jszip to bundle ArtifactManifest files into a ZIP
+    - Name: `cold-network-plane-{timestamp}.zip`
+    - Include manifest.json at root, all listed files, no extras
+    - Trigger browser download
+    - Log STUDIO_DOWNLOAD_ZIP audit event
+    - _Requirements: 8.1, 8.2, 8.3, 8.4_
+  - [x] 10.2 Write property test for ZIP contents
+    - **Property 17: ZIP contains exactly manifest files**
+    - **Validates: Requirements 8.3**
+  - [x] 10.3 Implement share link encoding/decoding
+    - Use lz-string to compress spec text → base64url → URL hash
+    - On Studio load, detect share payload and hydrate editor
+    - Show warning if compressed length > 8000 chars
+    - Log STUDIO_COPY_SHARE_LINK audit event
+    - _Requirements: 8.5, 8.6, 8.7, 8.8_
+  - [x] 10.4 Write property test for share link round-trip
+    - **Property 18: Share link round-trip**
+    - **Validates: Requirements 8.5, 8.6**
+
+- [x] 11. Checkpoint — Studio works end-to-end
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 12. Implement Audit UI
+  - [x] 12.1 Create audit table and filters
+    - Create `components/audit/AuditTable.tsx` — paginated table, most recent first
+    - Create `components/audit/AuditFilters.tsx` — filter by event type, date range, text search
+    - _Requirements: 10.1, 10.2, 10.3_
+  - [x] 12.2 Create audit detail drawer
+    - Create `components/audit/AuditDetailDrawer.tsx` — shadcn Sheet showing full event metadata
+    - _Requirements: 10.4_
+  - [x] 12.3 Wire audit page
+    - Create `app/(app)/dashboard/audit/page.tsx` — compose AuditTable + AuditFilters + AuditDetailDrawer
+    - Fetch events from GET /api/audit with pagination and filters
+    - _Requirements: 10.1, 10.2, 10.3, 10.4_
+  - [x] 12.4 Write property test for audit event filters
+    - **Property 24: Audit event filters return matching results**
+    - **Validates: Requirements 10.3**
+
+- [x] 13. Implement Marketing Landing Page
+  - [x] 13.1 Create marketing components
+    - Create `components/marketing/Navbar.tsx` — sticky nav with logo, anchor links (Features, How It Works, Demo), "Open Studio" CTA button
+    - Create `components/marketing/Hero.tsx` — headline, subheadline, primary CTA, optional secondary CTA
+    - Create `components/marketing/Features.tsx` — 3-4 feature cards (Live Topology, Artifacts, Share/Download, Audit)
+    - Create `components/marketing/HowItWorks.tsx` — 3-step flow (Write spec → See topology → Generate artifacts)
+    - Create `components/marketing/DemoPreview.tsx` — static Studio preview placeholder
+    - Create `components/marketing/CTABanner.tsx` — full-width CTA
+    - Create `components/marketing/Footer.tsx` — minimal footer
+    - _Requirements: 11.2_
+  - [x] 13.2 Wire landing page with metadata
+    - Update `app/(marketing)/page.tsx` — compose all marketing sections in order
+    - Add Next.js Metadata API export: title, description, Open Graph tags
+    - All CTA buttons link to `/dashboard/studio`
+    - _Requirements: 11.1, 11.3, 11.5_
+
+- [x] 14. Update dashboard navigation
+  - [x] 14.1 Update sidebar navigation
+    - Update `components/app-sidebar.tsx` to show nav items: Dashboard, Studio, Audit, Settings in order
+    - Highlight active route
+    - Use hugeicons for nav item icons
+    - _Requirements: 13.1, 13.2, 13.3_
+
+- [x] 15. Final checkpoint — Full MVP works
+  - Ensure all tests pass, ask the user if questions arise.
+
+## Notes
+
+- All tasks including property tests are required for comprehensive coverage
+- Each task references specific requirements for traceability
+- Checkpoints ensure incremental validation
+- Property tests validate universal correctness properties using fast-check
+- Unit tests validate specific examples and edge cases
+- The implementation language is TypeScript throughout (Next.js 16 App Router)
+- All spec content and artifacts remain client-side only — never persisted to the server DB
