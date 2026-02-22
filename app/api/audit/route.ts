@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuth, AuthError } from "@/lib/auth/middleware";
 import { writeAuditEvent } from "@/lib/audit/writer";
+import { checkAuditLoggingLimit } from "@/lib/auth/rate-limit";
 import { isValidEventType } from "@/lib/audit/events";
 import { prisma } from "@/lib/db/client";
 
@@ -13,6 +14,25 @@ const MAX_PAGE_SIZE = 100;
 export async function POST(request: Request) {
   try {
     const { userId } = await requireAuth();
+
+    // Rate limit: 100 audit events per hour per user
+    const { allowed, remaining, resetAt } = checkAuditLoggingLimit(userId);
+    if (!allowed) {
+      return NextResponse.json(
+        {
+          error: "Rate limit exceeded. Too many audit logging attempts.",
+          retryAfter: Math.ceil((resetAt - Date.now()) / 1000),
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": Math.ceil((resetAt - Date.now()) / 1000).toString(),
+            "X-RateLimit-Remaining": remaining.toString(),
+            "X-RateLimit-Reset": new Date(resetAt).toISOString(),
+          },
+        }
+      );
+    }
 
     const body = await request.json();
     const { eventType, metadata } = body as {
@@ -38,7 +58,16 @@ export async function POST(request: Request) {
       userAgent: request.headers.get("user-agent") ?? undefined,
     });
 
-    return NextResponse.json({ success: true }, { status: 201 });
+    return NextResponse.json(
+      { success: true },
+      {
+        status: 201,
+        headers: {
+          "X-RateLimit-Remaining": remaining.toString(),
+          "X-RateLimit-Reset": new Date(resetAt).toISOString(),
+        },
+      }
+    );
   } catch (err) {
     if (err instanceof AuthError) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuth, AuthError } from "@/lib/auth/middleware";
 import { writeAuditEvent } from "@/lib/audit/writer";
+import { checkProjectCreationLimit } from "@/lib/auth/rate-limit";
 import { prisma } from "@/lib/db/client";
 
 /**
@@ -31,6 +32,26 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const { userId } = await requireAuth();
+
+    // Rate limit: 20 projects per hour per user
+    const { allowed, remaining, resetAt } = checkProjectCreationLimit(userId);
+    if (!allowed) {
+      return NextResponse.json(
+        {
+          error: "Rate limit exceeded. Too many project creation attempts.",
+          retryAfter: Math.ceil((resetAt - Date.now()) / 1000),
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": Math.ceil((resetAt - Date.now()) / 1000).toString(),
+            "X-RateLimit-Remaining": remaining.toString(),
+            "X-RateLimit-Reset": new Date(resetAt).toISOString(),
+          },
+        }
+      );
+    }
+
     const body = await request.json();
     const { name, customerName, notes } = body as {
       name?: string;
@@ -61,7 +82,16 @@ export async function POST(request: Request) {
       // Audit failure must not block the primary operation
     }
 
-    return NextResponse.json({ data: project }, { status: 201 });
+    return NextResponse.json(
+      { data: project },
+      {
+        status: 201,
+        headers: {
+          "X-RateLimit-Remaining": remaining.toString(),
+          "X-RateLimit-Reset": new Date(resetAt).toISOString(),
+        },
+      }
+    );
   } catch (err) {
     if (err instanceof AuthError) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
