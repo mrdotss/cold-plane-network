@@ -39,3 +39,29 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+dev.db
+dev.db-shm
+dev.db-wal
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+
+# Logs
+logs/
+*.log
+
+# Misc
+.cache/
+.turbo/
+.kiro/
