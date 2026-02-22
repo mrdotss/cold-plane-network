@@ -1,36 +1,114 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Cold Plane Network
+
+A comprehensive **Azure to AWS migration advisor** and infrastructure mapping tool. Visualize, plan, and manage cloud migrations with intelligent service recommendations, compliance auditing, and interactive topology editing.
+
+## Features
+
+- **User Authentication** - Secure login with session management and password hashing
+- **Project Management** - Create and organize migration projects
+- **Azure Resource Import** - Ingest and parse Azure infrastructure
+- **Intelligent Mapping** - AI-powered Azure to AWS service recommendations with confidence scores
+- **Visual Network Editor** - Interactive topology visualization and editing with Dagre/XYFlow
+- **Audit Logging** - Comprehensive compliance tracking with data redaction
+- **Data Export** - Export migration plans as CSV or ZIP archives
+- **Offline Support** - Client-side storage with IndexedDB
+
+## Tech Stack
+
+- **Frontend**: Next.js 16, React 19, TypeScript, TailwindCSS, Shadcn UI
+- **Backend**: Next.js API Routes with server-side logic
+- **Database**: SQLite with Prisma ORM
+- **Visualization**: Dagre + XYFlow for graph rendering
+- **Testing**: Vitest with property-based testing (fast-check)
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 18+ 
+- npm or yarn
+
+### Installation
+
+1. Clone the repository and install dependencies:
+
+```bash
+npm install
+```
+
+2. Generate Prisma Client and set up the database:
+
+```bash
+npx prisma generate
+npx prisma migrate dev --name init
+```
+
+3. Start the development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+4. Open [http://localhost:3000](http://localhost:3000) in your browser
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Development
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Available Scripts
 
-## Learn More
+- `npm run dev` - Start development server with hot reload
+- `npm run build` - Build for production
+- `npm start` - Start production server
+- `npm run lint` - Run ESLint
 
-To learn more about Next.js, take a look at the following resources:
+### Project Structure
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```
+app/               # Next.js app directory
+├── (app)/         # Protected app routes
+├── (marketing)/   # Public marketing pages
+├── api/           # API routes (auth, projects, audit)
+├── login/         # Login page
+└── signup/        # Signup page
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+components/        # React components
+├── ui/            # Shadcn UI components
+├── studio/        # Canvas/editor components
+├── audit/         # Audit logging UI
+└── marketing/     # Marketing page components
 
-## Deploy on Vercel
+lib/               # Utilities and business logic
+├── audit/         # Audit logging system
+├── auth/          # Authentication helpers
+├── db/            # Database client
+├── export/        # Data export utilities
+├── spec/          # Specification parser
+└── contracts/     # Type definitions
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+prisma/            # Database schema and migrations
+hooks/             # Custom React hooks
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Database
+
+The project uses SQLite with Prisma. The schema includes:
+
+- **Users** - User accounts with authentication
+- **Sessions** - Token-based session management
+- **Projects** - Migration projects
+- **AzureResources** - Imported Azure infrastructure
+- **MappingRecommendations** - Generated AWS service mappings
+- **AuditEvents** - Compliance and activity logs
+
+## Testing
+
+Run tests with Vitest:
+
+```bash
+npm test
+```
+
+Property-based tests use `fast-check` for comprehensive coverage.
+
+## License
+
+MIT
