@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuth, AuthError } from "@/lib/auth/middleware";
 import { writeAuditEvent } from "@/lib/audit/writer";
+import { checkMappingEngineLimit } from "@/lib/auth/rate-limit";
 import { prisma } from "@/lib/db/client";
 import { findMapping } from "@/lib/mapping-engine";
 
@@ -46,6 +47,26 @@ export async function POST(
 ) {
   try {
     const { userId } = await requireAuth();
+
+    // Rate limit: 10 mapping operations per hour per user (expensive operation)
+    const { allowed, remaining, resetAt } = checkMappingEngineLimit(userId);
+    if (!allowed) {
+      return NextResponse.json(
+        {
+          error: "Rate limit exceeded. Too many mapping engine attempts.",
+          retryAfter: Math.ceil((resetAt - Date.now()) / 1000),
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": Math.ceil((resetAt - Date.now()) / 1000).toString(),
+            "X-RateLimit-Remaining": remaining.toString(),
+            "X-RateLimit-Reset": new Date(resetAt).toISOString(),
+          },
+        }
+      );
+    }
+
     const { projectId } = await params;
 
     const project = await prisma.project.findFirst({
@@ -95,7 +116,15 @@ export async function POST(
       });
     } catch { /* audit failure non-blocking */ }
 
-    return NextResponse.json({ data: { mappedCount: recommendations.length } });
+    return NextResponse.json(
+      { data: { mappedCount: recommendations.length } },
+      {
+        headers: {
+          "X-RateLimit-Remaining": remaining.toString(),
+          "X-RateLimit-Reset": new Date(resetAt).toISOString(),
+        },
+      }
+    );
   } catch (err) {
     if (err instanceof AuthError) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
