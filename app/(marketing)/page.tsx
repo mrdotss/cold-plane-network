@@ -3,6 +3,7 @@ import { Navbar } from "@/components/marketing/Navbar";
 import { Hero } from "@/components/marketing/Hero";
 import { Features } from "@/components/marketing/Features";
 import { MigrationAdvisor } from "@/components/marketing/MigrationAdvisor";
+import { Sizing } from "@/components/marketing/Sizing";
 import { HowItWorks } from "@/components/marketing/HowItWorks";
 import { DemoPreview } from "@/components/marketing/DemoPreview";
 import { CTABanner } from "@/components/marketing/CTABanner";
@@ -27,6 +28,7 @@ export default function MarketingPage() {
       <Hero />
       <Features />
       <MigrationAdvisor />
+      <Sizing />
       <HowItWorks />
       <DemoPreview />
       <CTABanner />

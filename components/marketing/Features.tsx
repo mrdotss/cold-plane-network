@@ -12,6 +12,7 @@ import {
   Share03Icon,
   ShieldIcon,
   ArrowDataTransferHorizontalIcon,
+  AiInnovation01Icon,
 } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
 
@@ -52,6 +53,12 @@ const features: Feature[] = [
     description:
       "Import Azure resource inventories and get instant, catalog-driven AWS migration recommendations with confidence ratings and exportable reports.",
   },
+  {
+    icon: AiInnovation01Icon,
+    title: "AI-Powered Sizing",
+    description:
+      "Upload AWS Pricing Calculator exports and get AI-driven sizing recommendations with On-Demand, RI, and Savings Plans comparisons.",
+  },
 ];
 
 export function Features() {
@@ -60,7 +67,7 @@ export function Features() {
       <h2 className="mb-8 text-center text-2xl font-semibold tracking-tight">
         Features
       </h2>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {features.map((f) => (
           <Card key={f.title}>
             <CardHeader>

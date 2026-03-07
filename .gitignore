@@ -40,6 +40,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+<<<<<<< Updated upstream
 # Database
 *.db
 *.sqlite
@@ -65,3 +66,8 @@ logs/
 .cache/
 .turbo/
 .kiro/
+=======
+# exception stuff
+*.db
+*.png
+>>>>>>> Stashed changes

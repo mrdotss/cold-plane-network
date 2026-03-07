@@ -11,9 +11,10 @@ model User {
   username     String       @unique
   passwordHash String
   createdAt    DateTime     @default(now())
-  sessions     Session[]
-  auditEvents  AuditEvent[]
-  projects     Project[]
+  sessions      Session[]
+  auditEvents   AuditEvent[]
+  projects      Project[]
+  sizingReports SizingReport[]
 }
 
 model Session {
@@ -92,4 +93,21 @@ model MappingRecommendation {
   azureResource AzureResource @relation(fields: [azureResourceId], references: [id], onDelete: Cascade)
 
   @@index([azureResourceId])
+}
+
+model SizingReport {
+  id           String   @id @default(cuid())
+  userId       String
+  fileName     String
+  reportType   String   // "report" | "recommend" | "full"
+  region       String   @default("")
+  totalMonthly Float    @default(0)
+  totalAnnual  Float    @default(0)
+  serviceCount Int      @default(0)
+  metadata     String   @default("{}") // JSON string, ≤ 1KB
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
 }

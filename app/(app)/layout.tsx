@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { validateSession } from "@/lib/auth/session";
+import { prisma } from "@/lib/db/client";
 import { AppSidebar } from "@/components/app-sidebar";
 import {
   SidebarInset,
@@ -26,9 +27,19 @@ export default async function AppLayout({
     redirect("/login");
   }
 
+  const user = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { username: true },
+  });
+
+  const userData = {
+    name: user?.username ?? "User",
+    email: user?.username ? `${user.username}` : "",
+  };
+
   return (
     <SidebarProvider>
-      <AppSidebar />
+      <AppSidebar user={userData} />
       <SidebarInset>{children}</SidebarInset>
     </SidebarProvider>
   );

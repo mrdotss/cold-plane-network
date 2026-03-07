@@ -27,6 +27,9 @@ export function Navbar() {
           <a href="#migration" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
             Migration
           </a>
+          <a href="#sizing" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+            Sizing
+          </a>
         </div>
 
         <Button asChild size="sm">

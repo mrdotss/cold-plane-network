@@ -22,11 +22,11 @@ import {
   Home01Icon,
   ComputerTerminalIcon,
   ShieldIcon,
-  Settings05Icon,
   ChartRingIcon,
   SentIcon,
   CommandIcon,
   ArrowDataTransferHorizontalIcon,
+  AiInnovation01Icon,
 } from "@hugeicons/core-free-icons"
 import type { IconSvgElement } from "@hugeicons/react"
 
@@ -51,14 +51,26 @@ const navItems: {
     icon: ShieldIcon,
   },
   {
-    title: "Settings",
-    url: "/dashboard/settings",
-    icon: Settings05Icon,
-  },
-  {
     title: "Migration Advisor",
     url: "/dashboard/migration",
     icon: ArrowDataTransferHorizontalIcon,
+  },
+]
+
+const aiToolsItems: {
+  title: string
+  url: string
+  icon: IconSvgElement
+}[] = [
+  {
+    title: "Sizing",
+    url: "/dashboard/sizing",
+    icon: AiInnovation01Icon,
+  },
+  {
+    title: "CFM Analysis",
+    url: "/dashboard/cfm",
+    icon: AiInnovation01Icon,
   },
 ]
 
@@ -79,13 +91,7 @@ const secondaryItems = [
   },
 ]
 
-const userData = {
-  name: "shadcn",
-  email: "m@example.com",
-  avatar: "/avatars/shadcn.jpg",
-}
-
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+export function AppSidebar({ user, ...props }: React.ComponentProps<typeof Sidebar> & { user: { name: string; email: string } }) {
   const pathname = usePathname()
 
   return (
@@ -130,10 +136,29 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             })}
           </SidebarMenu>
         </SidebarGroup>
+        <SidebarGroup>
+          <SidebarGroupLabel>AI Tools</SidebarGroupLabel>
+          <SidebarMenu>
+            {aiToolsItems.map((item) => {
+              const isActive = pathname.startsWith(item.url)
+
+              return (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
+                    <Link href={item.url}>
+                      <HugeiconsIcon icon={item.icon} strokeWidth={2} />
+                      <span>{item.title}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )
+            })}
+          </SidebarMenu>
+        </SidebarGroup>
         <NavSecondary items={secondaryItems} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={userData} />
+        <NavUser user={user} />
       </SidebarFooter>
     </Sidebar>
   )

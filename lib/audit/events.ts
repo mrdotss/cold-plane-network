@@ -19,6 +19,11 @@ export const AUDIT_EVENT_TYPES = [
   "MIGRATION_RESOURCE_IMPORT",
   "MIGRATION_MAPPING_RUN",
   "MIGRATION_REPORT_EXPORT",
+  "SIZING_UPLOAD",
+  "SIZING_GENERATE_REPORT",
+  "SIZING_AGENT_RECOMMEND",
+  "SIZING_DOWNLOAD_EXCEL",
+  "SIZING_AGENT_AUTOFILL",
 ] as const;
 
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
@@ -42,6 +47,11 @@ export const METADATA_ALLOWLISTS: Record<AuditEventType, readonly string[]> = {
   MIGRATION_RESOURCE_IMPORT: ["projectId", "resourceCount"],
   MIGRATION_MAPPING_RUN: ["projectId", "resourceCount"],
   MIGRATION_REPORT_EXPORT: ["projectId", "format"],
+  SIZING_UPLOAD: ["fileName", "serviceCount", "reportType"],
+  SIZING_GENERATE_REPORT: ["reportType", "serviceCount", "totalMonthly"],
+  SIZING_AGENT_RECOMMEND: ["reportType", "serviceCount", "promptLength"],
+  SIZING_DOWNLOAD_EXCEL: ["reportId", "reportType"],
+  SIZING_AGENT_AUTOFILL: ["reportType", "serviceCount", "inputTier", "filledTiers"],
 } as const;
 
 export interface AuditEventInput {
