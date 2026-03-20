@@ -8,9 +8,18 @@ interface ChatMessagesProps {
   messages: ChatMessageType[];
   /** ID of the message currently being streamed (if any). */
   streamingMessageId?: string;
+  /** Callback to remove an attachment from a user message. */
+  onRemoveAttachment?: (messageId: string, attachmentId: string) => void;
+  /** Callback to retry (regenerate) an assistant message. */
+  onRetry?: (messageId: string) => void;
 }
 
-export function ChatMessages({ messages, streamingMessageId }: ChatMessagesProps) {
+export function ChatMessages({
+  messages,
+  streamingMessageId,
+  onRemoveAttachment,
+  onRetry,
+}: ChatMessagesProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -42,6 +51,8 @@ export function ChatMessages({ messages, streamingMessageId }: ChatMessagesProps
             key={msg.id}
             message={msg}
             isStreaming={msg.id === streamingMessageId}
+            onRemoveAttachment={onRemoveAttachment}
+            onRetry={onRetry}
           />
         ))}
       </div>

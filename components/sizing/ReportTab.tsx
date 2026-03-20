@@ -52,6 +52,9 @@ export function ReportTab({ pricingData, fileName }: ReportTabProps) {
   const [currentServiceName, setCurrentServiceName] = useState<string | undefined>(undefined);
   const [completedCount, setCompletedCount] = useState(0);
   const [failedCount, setFailedCount] = useState(0);
+  // Phase-based progress (Fix 2)
+  const [autofillPhase, setAutofillPhase] = useState<"sending" | "parsing" | "done" | undefined>(undefined);
+  const [parsedCount, setParsedCount] = useState(0);
 
   const tierDetection: TierDetectionResult | null = useMemo(() => {
     if (!pricingData) return null;
@@ -105,6 +108,8 @@ export function ReportTab({ pricingData, fileName }: ReportTabProps) {
     setCurrentServiceName(undefined);
     setCompletedCount(0);
     setFailedCount(0);
+    setAutofillPhase("sending");
+    setParsedCount(0);
 
     if (services.length === 0) {
       setAutofillLoading(false);
@@ -131,6 +136,9 @@ export function ReportTab({ pricingData, fileName }: ReportTabProps) {
         throw new Error(errBody.error || `Auto-fill failed (${res.status})`);
       }
 
+      // Response received — switch to parsing phase
+      setAutofillPhase("parsing");
+
       let autofillResponse: AutofillResponse;
       try {
         const parsed = JSON.parse(responseText);
@@ -142,6 +150,13 @@ export function ReportTab({ pricingData, fileName }: ReportTabProps) {
 
       if (!autofillResponse?.services?.length) {
         throw new Error("Auto-fill returned no valid pricing data");
+      }
+
+      // Update parsedCount as we iterate through matched services
+      for (let i = 0; i < autofillResponse.services.length; i++) {
+        setParsedCount(i + 1);
+        // Small yield to allow React to render progress updates
+        if (i % 3 === 0) await new Promise((r) => setTimeout(r, 0));
       }
 
       const merged = mergePricingData(data, autofillResponse, detection.missingTiers);
@@ -163,6 +178,11 @@ export function ReportTab({ pricingData, fileName }: ReportTabProps) {
       }
 
       const filledCount = services.length - unfilled.length;
+
+      // All done — show completed state
+      setAutofillPhase("done");
+      setParsedCount(filledCount);
+
       const msg = skippedCount > 0
         ? `Auto-filled pricing for ${filledCount} service(s) (${skippedCount} pay-as-you-go skipped)`
         : `Auto-filled pricing for ${filledCount} service(s)`;
@@ -177,6 +197,8 @@ export function ReportTab({ pricingData, fileName }: ReportTabProps) {
       return null;
     } finally {
       setAutofillLoading(false);
+      // Reset phase if it wasn't set to "done" (i.e. on error)
+      setAutofillPhase((prev) => (prev === "done" ? prev : undefined));
     }
   }
 
@@ -188,6 +210,8 @@ export function ReportTab({ pricingData, fileName }: ReportTabProps) {
     setAutofillFailed(false);
     setAutofillWarning(null);
     setAutofillSuccess(null);
+    setAutofillPhase(undefined);
+    setParsedCount(0);
 
     try {
       let dataForExcel = pricingData;
@@ -335,6 +359,8 @@ export function ReportTab({ pricingData, fileName }: ReportTabProps) {
           currentServiceName={currentServiceName}
           completedCount={completedCount}
           failedCount={failedCount}
+          phase={autofillPhase}
+          parsedCount={parsedCount}
         />
       )}
 

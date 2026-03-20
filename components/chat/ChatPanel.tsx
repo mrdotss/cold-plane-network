@@ -111,6 +111,46 @@ export function ChatPanel({ pricingData, fileName }: ChatPanelProps) {
     [activeChatId],
   );
 
+  // Fix 4: Rename conversation
+  const handleRenameChat = useCallback(
+    async (chatId: string, newTitle: string) => {
+      try {
+        const res = await fetch(`/api/chat/${chatId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: newTitle }),
+        });
+        if (res.ok) {
+          setChats((prev) =>
+            prev.map((c) =>
+              c.id === chatId ? { ...c, title: newTitle } : c,
+            ),
+          );
+        }
+      } catch {
+        // Silently fail
+      }
+    },
+    [],
+  );
+
+  // Fix 3: Remove attachment from a user message
+  const handleRemoveAttachment = useCallback(
+    (messageId: string, attachmentId: string) => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId
+            ? {
+                ...m,
+                attachments: m.attachments.filter((a) => a.id !== attachmentId),
+              }
+            : m,
+        ),
+      );
+    },
+    [],
+  );
+
   const handleUploadFile = useCallback(async (file: File): Promise<FileRef | null> => {
     const formData = new FormData();
     formData.append("file", file);
@@ -133,27 +173,21 @@ export function ChatPanel({ pricingData, fileName }: ChatPanelProps) {
     setStreamingMessageId(undefined);
   }, []);
 
-  const handleSend = useCallback(
-    async (message: string, attachments: FileRef[]) => {
-      setError(null);
-
-      // Optimistic user message
-      const userMsgId = crypto.randomUUID();
-      const userMsg: ChatMessage = {
-        id: userMsgId,
-        chatId: activeChatId ?? "",
-        role: "user",
-        content: message,
-        attachments,
-        createdAt: new Date(),
-      };
-      setMessages((prev) => [...prev, userMsg]);
-
+  /**
+   * Core streaming logic — creates an assistant placeholder and streams the response.
+   * Extracted from handleSend so it can be reused by handleRetry.
+   */
+  const streamResponse = useCallback(
+    async (
+      message: string,
+      attachments: FileRef[],
+      chatId: string | undefined,
+    ) => {
       // Placeholder for assistant response
       const assistantMsgId = crypto.randomUUID();
       const assistantMsg: ChatMessage = {
         id: assistantMsgId,
-        chatId: activeChatId ?? "",
+        chatId: chatId ?? "",
         role: "assistant",
         content: "",
         attachments: [],
@@ -177,7 +211,7 @@ export function ChatPanel({ pricingData, fileName }: ChatPanelProps) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            chatId: activeChatId,
+            chatId,
             message,
             attachments,
             pricingContext,
@@ -192,9 +226,8 @@ export function ChatPanel({ pricingData, fileName }: ChatPanelProps) {
 
         // Read the new chatId from response header if this was a new chat
         const newChatId = res.headers.get("X-Chat-Id");
-        if (newChatId && !activeChatId) {
+        if (newChatId && !chatId) {
           setActiveChatId(newChatId);
-          // Update the placeholder messages with the real chatId
           setMessages((prev) =>
             prev.map((m) =>
               m.chatId === "" ? { ...m, chatId: newChatId } : m,
@@ -236,7 +269,6 @@ export function ChatPanel({ pricingData, fileName }: ChatPanelProps) {
               } else if (event.type === "error") {
                 setError(event.message);
               }
-              // "done" — stream complete, handled by loop exit
             } catch {
               // Skip malformed SSE lines
             }
@@ -260,7 +292,60 @@ export function ChatPanel({ pricingData, fileName }: ChatPanelProps) {
         abortRef.current = null;
       }
     },
-    [activeChatId, pricingData, fileName],
+    [pricingData, fileName],
+  );
+
+  const handleSend = useCallback(
+    async (message: string, attachments: FileRef[]) => {
+      setError(null);
+
+      // Optimistic user message
+      const userMsgId = crypto.randomUUID();
+      const userMsg: ChatMessage = {
+        id: userMsgId,
+        chatId: activeChatId ?? "",
+        role: "user",
+        content: message,
+        attachments,
+        createdAt: new Date(),
+      };
+      setMessages((prev) => [...prev, userMsg]);
+
+      await streamResponse(message, attachments, activeChatId);
+    },
+    [activeChatId, streamResponse],
+  );
+
+  // Fix 7: Retry — remove assistant message and re-stream
+  const handleRetry = useCallback(
+    async (assistantMessageId: string) => {
+      if (isStreaming) return;
+
+      // Find the assistant message and the preceding user message
+      const msgIndex = messages.findIndex((m) => m.id === assistantMessageId);
+      if (msgIndex < 0) return;
+
+      const assistantMsg = messages[msgIndex];
+      if (assistantMsg.role !== "assistant") return;
+
+      const userMsg = messages
+        .slice(0, msgIndex)
+        .reverse()
+        .find((m) => m.role === "user");
+      if (!userMsg) return;
+
+      // Remove the assistant message from local state
+      setMessages((prev) => prev.filter((m) => m.id !== assistantMessageId));
+      setError(null);
+
+      // Re-stream the response
+      await streamResponse(
+        userMsg.content,
+        userMsg.attachments,
+        activeChatId,
+      );
+    },
+    [messages, activeChatId, isStreaming, streamResponse],
   );
 
   return (
@@ -274,12 +359,13 @@ export function ChatPanel({ pricingData, fileName }: ChatPanelProps) {
             onSelect={handleSelectChat}
             onDelete={handleDeleteChat}
             onNewChat={handleNewChat}
+            onRename={handleRenameChat}
           />
         </div>
       )}
 
       {/* Main chat area */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {/* Header */}
         <div className="flex items-center gap-2 border-b px-3 py-2">
           <Button
@@ -322,6 +408,8 @@ export function ChatPanel({ pricingData, fileName }: ChatPanelProps) {
         <ChatMessages
           messages={messages}
           streamingMessageId={streamingMessageId}
+          onRemoveAttachment={handleRemoveAttachment}
+          onRetry={handleRetry}
         />
 
         {/* Input */}

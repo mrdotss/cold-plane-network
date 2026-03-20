@@ -146,6 +146,42 @@ export async function saveMessage(
 }
 
 /**
+ * Update a chat's title, scoped to the authenticated user.
+ * Returns true if the chat was found and updated, false otherwise.
+ */
+export async function updateChatTitle(
+  chatId: string,
+  userId: string,
+  title: string,
+): Promise<boolean> {
+  const result = await db
+    .update(chats)
+    .set({ title, updatedAt: new Date() })
+    .where(and(eq(chats.id, chatId), eq(chats.userId, userId)))
+    .returning({ id: chats.id });
+
+  return result.length > 0;
+}
+
+/**
+ * Delete a single message from a chat.
+ * Used by the retry feature to remove an old assistant response before regenerating.
+ */
+export async function deleteMessage(
+  messageId: string,
+  chatId: string,
+): Promise<boolean> {
+  const result = await db
+    .delete(chatMessages)
+    .where(
+      and(eq(chatMessages.id, messageId), eq(chatMessages.chatId, chatId)),
+    )
+    .returning({ id: chatMessages.id });
+
+  return result.length > 0;
+}
+
+/**
  * Delete a chat and cascade-delete all messages, scoped to the authenticated user.
  * Returns true if the chat was found and deleted, false otherwise.
  */

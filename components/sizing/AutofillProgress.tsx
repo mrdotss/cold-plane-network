@@ -14,6 +14,10 @@ interface AutofillProgressProps {
   completedCount?: number;
   /** Number of services that failed so far. */
   failedCount?: number;
+  /** High-level phase for live status display. */
+  phase?: "sending" | "parsing" | "done";
+  /** Number of services parsed so far (used with phase="parsing"). */
+  parsedCount?: number;
 }
 
 export function AutofillProgress({
@@ -23,6 +27,8 @@ export function AutofillProgress({
   currentServiceName,
   completedCount = 0,
   failedCount = 0,
+  phase,
+  parsedCount = 0,
 }: AutofillProgressProps) {
   const [dots, setDots] = useState("");
 
@@ -34,18 +40,43 @@ export function AutofillProgress({
     return () => clearInterval(interval);
   }, []);
 
-  const hasRealProgress =
-    currentBatch !== undefined && totalBatches !== undefined && totalBatches > 0;
+  // Phase-based progress takes priority when available
+  const hasPhase = phase !== undefined;
+  const phasePercent =
+    phase === "done"
+      ? 100
+      : phase === "parsing"
+        ? parsedCount > 0 && serviceCount > 0
+          ? Math.round((parsedCount / serviceCount) * 100)
+          : 50
+        : 0;
 
-  const progressPercent = hasRealProgress
-    ? Math.round(((currentBatch + 1) / totalBatches) * 100)
-    : 0;
+  const hasRealProgress = hasPhase
+    ? phase === "parsing" || phase === "done"
+    : currentBatch !== undefined && totalBatches !== undefined && totalBatches > 0;
 
-  const statusText = hasRealProgress
-    ? currentServiceName
+  const progressPercent = hasPhase
+    ? phasePercent
+    : hasRealProgress && currentBatch !== undefined && totalBatches !== undefined
+      ? Math.round(((currentBatch + 1) / totalBatches) * 100)
+      : 0;
+
+  let statusText: string;
+  if (hasPhase) {
+    if (phase === "sending") {
+      statusText = `Sending ${serviceCount} service${serviceCount !== 1 ? "s" : ""} to AI Agent${dots}`;
+    } else if (phase === "parsing") {
+      statusText = `Parsing results: ${parsedCount} of ${serviceCount} services matched${dots}`;
+    } else {
+      statusText = `Done — ${parsedCount} service${parsedCount !== 1 ? "s" : ""} filled`;
+    }
+  } else if (hasRealProgress && currentBatch !== undefined && totalBatches !== undefined) {
+    statusText = currentServiceName
       ? `Processing service ${currentBatch + 1} of ${totalBatches}: ${currentServiceName}${dots}`
-      : `Processing service ${currentBatch + 1} of ${totalBatches}${dots}`
-    : `Preparing to look up ${serviceCount} service${serviceCount !== 1 ? "s" : ""}${dots}`;
+      : `Processing service ${currentBatch + 1} of ${totalBatches}${dots}`;
+  } else {
+    statusText = `Preparing to look up ${serviceCount} service${serviceCount !== 1 ? "s" : ""}${dots}`;
+  }
 
   return (
     <div className="rounded-lg border border-purple-200 bg-purple-50 p-4 dark:border-purple-900 dark:bg-purple-950">
@@ -84,7 +115,11 @@ export function AutofillProgress({
       <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-purple-200 dark:bg-purple-800">
         {hasRealProgress ? (
           <div
-            className="h-full rounded-full bg-gradient-to-r from-purple-500 to-purple-600 transition-all duration-500 ease-out"
+            className={`h-full rounded-full transition-all duration-500 ease-out ${
+              phase === "done"
+                ? "bg-gradient-to-r from-green-500 to-green-600"
+                : "bg-gradient-to-r from-purple-500 to-purple-600"
+            }`}
             style={{ width: `${progressPercent}%` }}
           />
         ) : (
