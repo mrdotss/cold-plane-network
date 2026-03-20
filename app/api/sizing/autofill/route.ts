@@ -15,39 +15,60 @@ function stripCodeFences(text: string): string {
 /**
  * POST /api/sizing/autofill
  * Ask the CPN Agent to provide missing pricing tiers.
- * Uses stateless agent call (store: false) — no MCP tool calls.
+ * Returns a JSON response with the autofill results.
+ *
+ * Uses a SINGLE callAgentSync() call with ALL services in one prompt
+ * to avoid multiplying API costs and latency.
  */
 export async function POST(request: Request) {
+  // --- Auth ---
+  let userId: string;
   try {
-    const { userId } = await requireAuth();
-    const body = await request.json();
-
-    const parsed = autofillRequestSchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: "Validation failed", details: parsed.error.issues },
-        { status: 400 }
-      );
+    ({ userId } = await requireAuth());
+  } catch (err) {
+    if (err instanceof AuthError) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
-    const { services, inputTier, missingTiers } = parsed.data;
+  // --- Validation ---
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
 
-    // Log audit event (non-blocking)
-    try {
-      await writeAuditEvent({
-        userId,
-        eventType: "SIZING_AGENT_AUTOFILL",
-        metadata: {
-          reportType: "autofill",
-          serviceCount: services.length,
-          inputTier,
-          filledTiers: missingTiers,
-        },
-      });
-    } catch {
-      // Audit failure must not block the primary operation
-    }
+  const parsed = autofillRequestSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Validation failed", details: parsed.error.issues },
+      { status: 400 },
+    );
+  }
 
+  const { services, inputTier, missingTiers } = parsed.data;
+  const totalServices = services.length;
+
+  // Log audit event (non-blocking)
+  try {
+    await writeAuditEvent({
+      userId,
+      eventType: "SIZING_AGENT_AUTOFILL",
+      metadata: {
+        reportType: "autofill",
+        serviceCount: totalServices,
+        inputTier,
+        filledTiers: missingTiers,
+      },
+    });
+  } catch {
+    // Audit failure must not block the primary operation
+  }
+
+  // --- Call agent and parse response ---
+  try {
     const prompt = buildAutofillPrompt(services, inputTier, missingTiers);
     const rawResponse = await callAgentSync(prompt, "");
     const cleaned = stripCodeFences(rawResponse);
@@ -58,34 +79,22 @@ export async function POST(request: Request) {
     } catch {
       return NextResponse.json(
         { error: "Agent returned no valid pricing data" },
-        { status: 422 }
+        { status: 502 },
       );
     }
 
     const results = agentData.services ?? [];
 
-    if (results.length === 0 && services.length > 0) {
+    if (results.length === 0 && totalServices > 0) {
       return NextResponse.json(
         { error: "Agent returned no valid pricing data" },
-        { status: 422 }
+        { status: 502 },
       );
     }
 
-    return NextResponse.json({ data: { services: results } });
+    return NextResponse.json({ services: results });
   } catch (err) {
-    if (err instanceof AuthError) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const message = err instanceof Error ? err.message : "Agent request failed";
-
-    if (message.includes("not set")) {
-      return NextResponse.json({ error: "Agent service unavailable" }, { status: 503 });
-    }
-
-    return NextResponse.json(
-      { error: "Agent request failed", detail: message },
-      { status: 502 }
-    );
+    return NextResponse.json({ error: message }, { status: 502 });
   }
 }

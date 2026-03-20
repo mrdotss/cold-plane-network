@@ -24,7 +24,7 @@ export function SizingPage() {
   }, []);
 
   return (
-    <ResizablePanelGroup orientation="horizontal" className="min-h-[600px]">
+    <ResizablePanelGroup orientation="horizontal" className="flex-1 overflow-hidden">
       <ResizablePanel defaultSize={45} minSize={30}>
         <div className="h-full overflow-y-auto p-4">
           <ReportPanel onParsed={handleParsed} />

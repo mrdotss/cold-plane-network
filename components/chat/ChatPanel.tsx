@@ -264,7 +264,7 @@ export function ChatPanel({ pricingData, fileName }: ChatPanelProps) {
   );
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full overflow-hidden">
       {/* Sidebar */}
       {sidebarOpen && (
         <div className="w-52 shrink-0">

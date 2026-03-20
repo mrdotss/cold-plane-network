@@ -81,7 +81,7 @@ describe("POST /api/sizing/autofill", () => {
     expect(json.error).toBe("Validation failed");
   });
 
-  it("returns 200 with valid agent JSON response", async () => {
+  it("returns 200 JSON with valid agent response", async () => {
     const agentResponse = JSON.stringify({
       services: [{
         service: "Amazon EC2",
@@ -100,11 +100,11 @@ describe("POST /api/sizing/autofill", () => {
 
     expect(res.status).toBe(200);
     const json = await res.json();
-    expect(json.data.services).toHaveLength(1);
-    expect(json.data.services[0].ri1Year.monthly).toBe(30);
+    expect(json.services).toHaveLength(1);
+    expect(json.services[0].ri1Year.monthly).toBe(30);
   });
 
-  it("returns 422 when agent returns invalid JSON", async () => {
+  it("returns 502 when agent returns invalid JSON", async () => {
     (callAgentSync as ReturnType<typeof vi.fn>).mockResolvedValue("not valid json at all");
 
     const res = await POST(makeRequest({
@@ -113,8 +113,8 @@ describe("POST /api/sizing/autofill", () => {
       missingTiers: ["ri1Year"],
     }));
 
-    expect(res.status).toBe(422);
+    expect(res.status).toBe(502);
     const json = await res.json();
-    expect(json.error).toBe("Agent returned no valid pricing data");
+    expect(json.error).toContain("no valid pricing data");
   });
 });

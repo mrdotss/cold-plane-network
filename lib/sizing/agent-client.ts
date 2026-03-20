@@ -237,6 +237,7 @@ export async function callAgentSync(
   const res = await agentFetch({
     input: [{ role: "user", content: prompt }],
     agent_reference: { name: agentName, type: "agent_reference" },
+    stream: false,
     store: false,
   });
 
@@ -245,11 +246,45 @@ export async function callAgentSync(
     throw new Error(`Agent call failed (${res.status}): ${errText.slice(0, 300)}`);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const data: any = await res.json();
-  if (data.output_text) return data.output_text;
+  // Read the full response text first, then parse as JSON.
+  // This avoids issues where chunked responses trip up res.json().
+  const responseText = await res.text();
 
-  // Fall back to parsing output array
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let data: any;
+  try {
+    data = JSON.parse(responseText);
+  } catch (parseErr) {
+    // If Azure returned an SSE stream despite stream:false, extract from SSE
+    const lines = responseText.split("\n").filter((l) => l.startsWith("data: "));
+    const texts: string[] = [];
+    for (const line of lines) {
+      const payload = line.slice(6).trim();
+      if (payload === "[DONE]") continue;
+      try {
+        const evt = JSON.parse(payload);
+        if (evt.type === "response.output_text.delta" && evt.delta) {
+          texts.push(evt.delta);
+        }
+        if (evt.output_text) texts.push(evt.output_text);
+      } catch {
+        // skip
+      }
+    }
+    if (texts.length > 0) return texts.join("");
+    throw new Error(`Agent returned unparseable response: ${responseText.slice(0, 200)}`);
+  }
+
+  // Extract output text from the Responses API JSON structure.
+  // The response has an `output` array containing items like tool calls and messages.
+  // The final message item has `type: "message"` with `content[].type === "output_text"`.
+
+  // 1. Check for top-level output_text (convenience field, may not exist in raw REST)
+  if (data.output_text) {
+    return data.output_text;
+  }
+
+  // 2. Parse the output array — look for message items with output_text content
   if (Array.isArray(data.output)) {
     const texts: string[] = [];
     for (const item of data.output) {
@@ -264,7 +299,23 @@ export async function callAgentSync(
     if (texts.length > 0) return texts.join("\n");
   }
 
-  return JSON.stringify(data);
+  // 3. Check for output_text nested in the last output item directly
+  if (Array.isArray(data.output) && data.output.length > 0) {
+    const lastItem = data.output[data.output.length - 1];
+    if (lastItem.text) return lastItem.text;
+    if (lastItem.content && typeof lastItem.content === "string") return lastItem.content;
+  }
+
+  // 4. Fallback: stringify the output array only (not the full response with metadata/tools)
+  if (Array.isArray(data.output)) {
+    throw new Error(
+      `Agent response has output array (${data.output.length} items) but no extractable text. ` +
+      `Item types: ${data.output.map((i: { type?: string }) => i.type).join(", ")}. ` +
+      `First item keys: ${data.output[0] ? Object.keys(data.output[0]).join(", ") : "none"}`
+    );
+  }
+
+  throw new Error(`Agent returned unexpected response structure: ${Object.keys(data).join(", ")}`);
 }
 
 /**

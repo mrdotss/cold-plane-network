@@ -46,6 +46,12 @@ export function ReportTab({ pricingData, fileName }: ReportTabProps) {
   const [autofillEnabled, setAutofillEnabled] = useState(true);
   // Track if autofill failed so we can offer "Generate without auto-fill"
   const [autofillFailed, setAutofillFailed] = useState(false);
+  // SSE progress state
+  const [currentBatch, setCurrentBatch] = useState<number | undefined>(undefined);
+  const [totalBatches, setTotalBatches] = useState<number | undefined>(undefined);
+  const [currentServiceName, setCurrentServiceName] = useState<string | undefined>(undefined);
+  const [completedCount, setCompletedCount] = useState(0);
+  const [failedCount, setFailedCount] = useState(0);
 
   const tierDetection: TierDetectionResult | null = useMemo(() => {
     if (!pricingData) return null;
@@ -94,6 +100,11 @@ export function ReportTab({ pricingData, fileName }: ReportTabProps) {
     setAutofillLoading(true);
     setAutofillWarning(null);
     setAutofillSuccess(null);
+    setCurrentBatch(undefined);
+    setTotalBatches(undefined);
+    setCurrentServiceName(undefined);
+    setCompletedCount(0);
+    setFailedCount(0);
 
     if (services.length === 0) {
       setAutofillLoading(false);
@@ -112,12 +123,27 @@ export function ReportTab({ pricingData, fileName }: ReportTabProps) {
         }),
       });
 
+      // Read body as text first, then parse
+      const responseText = await res.text();
+
       if (!res.ok) {
-        const body = await res.json().catch(() => ({ error: "Auto-fill request failed" }));
-        throw new Error(body.error || `Auto-fill failed (${res.status})`);
+        const errBody = (() => { try { return JSON.parse(responseText); } catch { return { error: `Auto-fill failed (${res.status})` }; } })();
+        throw new Error(errBody.error || `Auto-fill failed (${res.status})`);
       }
 
-      const { data: autofillResponse } = (await res.json()) as { data: AutofillResponse };
+      let autofillResponse: AutofillResponse;
+      try {
+        const parsed = JSON.parse(responseText);
+        // Handle both { services: [...] } and { data: { services: [...] } } shapes
+        autofillResponse = parsed.data ?? parsed;
+      } catch {
+        throw new Error("Auto-fill returned invalid response");
+      }
+
+      if (!autofillResponse?.services?.length) {
+        throw new Error("Auto-fill returned no valid pricing data");
+      }
+
       const merged = mergePricingData(data, autofillResponse, detection.missingTiers);
 
       // Check for partial failures (services not matched) — only among RI-eligible ones
@@ -302,7 +328,14 @@ export function ReportTab({ pricingData, fileName }: ReportTabProps) {
 
       {/* AI progress animation during autofill */}
       {autofillLoading && pricingData && (
-        <AutofillProgress serviceCount={pricingData.serviceCount} />
+        <AutofillProgress
+          serviceCount={pricingData.serviceCount}
+          currentBatch={currentBatch}
+          totalBatches={totalBatches}
+          currentServiceName={currentServiceName}
+          completedCount={completedCount}
+          failedCount={failedCount}
+        />
       )}
 
       {/* Autofill success message */}

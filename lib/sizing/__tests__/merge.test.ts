@@ -86,8 +86,14 @@ describe("Property 4: Merge produces correct pricing for matched services", () =
   it("matched services get agent pricing, unmatched retain zeros", () => {
     fc.assert(
       fc.property(
-        // Generate 1-3 services, pick one as the "matched" service
-        fc.array(serviceIdentArb, { minLength: 2, maxLength: 4 }),
+        // Generate 1-3 services with unique composite keys
+        fc.array(serviceIdentArb, { minLength: 2, maxLength: 4 })
+          .filter((arr) => {
+            const keys = arr.map(
+              (s) => `${s.serviceName.toLowerCase()}|${s.description.toLowerCase()}|${s.region.toLowerCase()}`
+            );
+            return new Set(keys).size === keys.length;
+          }),
         fc.constantFrom<TierKey>("onDemand", "ri1Year", "ri3Year"),
         pricingValArb,
         (serviceIdents, presentTier, agentPricing) => {

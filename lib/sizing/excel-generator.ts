@@ -5,9 +5,9 @@ import { isRiEligible } from "@/lib/sizing/merge";
 /**
  * Unified column layout:
  * Group | Region | Description | Service | Specification |
- * OD Upfront | OD Monthly | OD 12Mo |
- * RI1 Upfront | RI1 Monthly | RI1 12Mo |
- * RI3 Upfront | RI3 Monthly | RI3 12Mo |
+ * OD Up. | OD Mo. | OD 12Mo |
+ * 1Y Up. | 1Y Mo. | 1Y 12Mo |
+ * 3Y Up. | 3Y Mo. | 3Y 12Mo |
  * Currency | Config Summary
  */
 const COLUMN_HEADERS = [
@@ -16,17 +16,17 @@ const COLUMN_HEADERS = [
   "Description",
   "Service",
   "Specification",
-  "OD Upfront",
-  "OD Monthly",
-  "OD 12 Months",
-  "RI 1Y Upfront",
-  "RI 1Y Monthly",
-  "RI 1Y 12 Months",
-  "RI 3Y Upfront",
-  "RI 3Y Monthly",
-  "RI 3Y 12 Months",
+  "OD Up.",
+  "OD Mo.",
+  "OD 12Mo",
+  "1Y Up.",
+  "1Y Mo.",
+  "1Y 12Mo",
+  "3Y Up.",
+  "3Y Mo.",
+  "3Y 12Mo",
   "Currency",
-  "Configuration Summary",
+  "Config Summary",
 ];
 
 const COL_COUNT = COLUMN_HEADERS.length;
@@ -142,7 +142,9 @@ function autoSizeColumns(sheet: ExcelJS.Worksheet) {
         if (len > maxLen) maxLen = len;
       }
     });
-    sheet.getColumn(col).width = Math.min(maxLen + 4, 50);
+    // Config Summary column (col 16) gets a tighter cap of 30
+    const cap = col === 16 ? 30 : 35;
+    sheet.getColumn(col).width = Math.min(maxLen + 2, cap);
   }
 }
 
@@ -377,6 +379,29 @@ export async function generateExcelReport(data: PricingData): Promise<ExcelJS.Wo
 
   // 8.3: Auto-size column widths
   autoSizeColumns(sheet);
+
+  // Explicit column width overrides for compact layout
+  const columnWidthOverrides: Record<number, number> = {
+    1: 16,  // Group Hierarchy
+    2: 14,  // Region
+    3: 18,  // Description
+    4: 22,  // Service
+    5: 16,  // Specification
+    6: 12,  // OD Up.
+    7: 12,  // OD Mo.
+    8: 12,  // OD 12Mo
+    9: 12,  // 1Y Up.
+    10: 12, // 1Y Mo.
+    11: 12, // 1Y 12Mo
+    12: 12, // 3Y Up.
+    13: 12, // 3Y Mo.
+    14: 12, // 3Y 12Mo
+    15: 10, // Currency
+    // Column 16 (Config Summary) keeps auto-sized width (capped at 30)
+  };
+  for (const [col, width] of Object.entries(columnWidthOverrides)) {
+    sheet.getColumn(Number(col)).width = width;
+  }
 
   return workbook;
 }

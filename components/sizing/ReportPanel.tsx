@@ -139,9 +139,8 @@ export function ReportPanel({ onParsed }: ReportPanelProps) {
         throw new Error(body.error || `Auto-fill failed (${res.status})`);
       }
 
-      const { data: autofillResponse } = (await res.json()) as {
-        data: AutofillResponse;
-      };
+      const json = await res.json();
+      const autofillResponse: AutofillResponse = json.data ?? json;
       const merged = mergePricingData(data, autofillResponse, detection.missingTiers);
 
       const returnedNames = new Set(
