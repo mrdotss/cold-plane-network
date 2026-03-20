@@ -1,7 +1,9 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { validateSession } from "@/lib/auth/session";
-import { prisma } from "@/lib/db/client";
+import { db } from "@/lib/db/client";
+import { users } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 import { AppSidebar } from "@/components/app-sidebar";
 import {
   SidebarInset,
@@ -27,10 +29,11 @@ export default async function AppLayout({
     redirect("/login");
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.userId },
-    select: { username: true },
-  });
+  const [user] = await db
+    .select({ username: users.username })
+    .from(users)
+    .where(eq(users.id, session.userId))
+    .limit(1);
 
   const userData = {
     name: user?.username ?? "User",

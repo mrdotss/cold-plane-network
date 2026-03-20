@@ -17,7 +17,7 @@ all from a single browser tab.
 
 ## MVP Scope (this iteration)
 
-The MVP delivers six pillars:
+The MVP delivers eight pillars:
 
 1. **Auth** — Register, login, logout with credential-based sessions.
 2. **Studio** — Spec editor (code + form tabs), live topology preview, artifact output.
@@ -25,6 +25,8 @@ The MVP delivers six pillars:
 4. **Artifacts** — Generate Terraform / config files from the parsed spec.
 5. **Share / Download** — Copy a share link; download a ZIP of generated artifacts.
 6. **Audit** — Append-only event log of user actions with bounded metadata.
+7. **Sizing** — Single Generate Report feature with AI-powered auto-fill for AWS pricing data.
+8. **Chatbot** — AI-powered conversational analysis integrated alongside Sizing report generation, using Azure AI Foundry's `cpn-agent` for multi-turn conversations about pricing and cost optimization.
 
 ## Explicit Non-Goals (MVP)
 
@@ -41,7 +43,7 @@ The MVP delivers six pillars:
 | DB stores ONLY bounded metadata | User records, session tokens, audit event rows. |
 | DB MUST NOT store spec bodies | Plane spec content lives client-side only. |
 | DB MUST NOT store artifact contents | Generated Terraform / configs are ephemeral, client-side. |
-| DB MUST NOT store secrets/tokens/credentials | No API keys, device passwords, or cloud credentials in SQLite. |
+| DB MUST NOT store secrets/tokens/credentials | No API keys, device passwords, or cloud credentials in PostgreSQL. |
 | DB MUST NOT store large unbounded text blobs | Audit payloads MUST be bounded (see event taxonomy). |
 
 ## Event Taxonomy
@@ -73,6 +75,15 @@ All audit events use a `CATEGORY_ACTION` naming convention.
 | `WORKSPACE_CREATE` | `{ name }` |
 | `WORKSPACE_RENAME` | `{ oldName, newName }` |
 | `WORKSPACE_DELETE` | `{ name }` |
+
+### CHAT_*
+
+| Event | Metadata |
+|-------|----------|
+| `CHAT_CREATED` | `{ chatId }` |
+| `CHAT_MESSAGE_SENT` | `{ chatId, hasAttachments, attachmentTypes }` |
+| `CHAT_DELETED` | `{ chatId }` |
+| `CHAT_FILE_UPLOADED` | `{ fileType, fileSize }` |
 
 > Metadata values MUST be bounded scalars or short arrays. Never include spec bodies,
 > artifact contents, or credentials in metadata.

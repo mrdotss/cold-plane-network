@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { requireAuth, AuthError } from "@/lib/auth/middleware";
 import { writeAuditEvent } from "@/lib/audit/writer";
-import { prisma } from "@/lib/db/client";
+import { db } from "@/lib/db/client";
+import { sizingReports } from "@/lib/db/schema";
+import { eq, desc, count } from "drizzle-orm";
 import { createReportSchema } from "@/lib/sizing/validators";
 
 /**
@@ -16,14 +18,18 @@ export async function GET(request: Request) {
     const limit = Math.min(50, Math.max(1, Number(url.searchParams.get("limit")) || 10));
     const skip = (page - 1) * limit;
 
-    const [reports, total] = await Promise.all([
-      prisma.sizingReport.findMany({
-        where: { userId },
-        orderBy: { createdAt: "desc" },
-        skip,
-        take: limit,
-      }),
-      prisma.sizingReport.count({ where: { userId } }),
+    const [reports, [{ total }]] = await Promise.all([
+      db
+        .select()
+        .from(sizingReports)
+        .where(eq(sizingReports.userId, userId))
+        .orderBy(desc(sizingReports.createdAt))
+        .offset(skip)
+        .limit(limit),
+      db
+        .select({ total: count() })
+        .from(sizingReports)
+        .where(eq(sizingReports.userId, userId)),
     ]);
 
     return NextResponse.json({ data: reports, total });
@@ -60,8 +66,9 @@ export async function POST(request: Request) {
         ? JSON.stringify({ _truncated: true })
         : metadata;
 
-    const report = await prisma.sizingReport.create({
-      data: {
+    const [report] = await db
+      .insert(sizingReports)
+      .values({
         userId,
         fileName,
         reportType,
@@ -70,8 +77,8 @@ export async function POST(request: Request) {
         totalAnnual,
         serviceCount,
         metadata: metadataStr,
-      },
-    });
+      })
+      .returning();
 
     try {
       await writeAuditEvent({

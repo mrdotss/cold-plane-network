@@ -17,7 +17,7 @@ A comprehensive **Azure to AWS migration advisor** and infrastructure mapping to
 
 - **Frontend**: Next.js 16, React 19, TypeScript, TailwindCSS, Shadcn UI
 - **Backend**: Next.js API Routes with server-side logic
-- **Database**: SQLite with Prisma ORM
+- **Database**: PostgreSQL with Drizzle ORM
 - **Visualization**: Dagre + XYFlow for graph rendering
 - **Testing**: Vitest with property-based testing (fast-check)
 
@@ -36,14 +36,20 @@ A comprehensive **Azure to AWS migration advisor** and infrastructure mapping to
 npm install
 ```
 
-2. Generate Prisma Client and set up the database:
+2. Set up environment variables:
 
 ```bash
-npx prisma generate
-npx prisma migrate dev --name init
+cp .env.example .env
+# Set DATABASE_URL to your PostgreSQL connection string
 ```
 
-3. Start the development server:
+3. Run database migrations:
+
+```bash
+npx drizzle-kit migrate
+```
+
+4. Start the development server:
 
 ```bash
 npm run dev
@@ -79,18 +85,17 @@ components/        # React components
 lib/               # Utilities and business logic
 ├── audit/         # Audit logging system
 ├── auth/          # Authentication helpers
-├── db/            # Database client
+├── db/            # Drizzle ORM client, schema, and migrations
 ├── export/        # Data export utilities
 ├── spec/          # Specification parser
 └── contracts/     # Type definitions
 
-prisma/            # Database schema and migrations
 hooks/             # Custom React hooks
 ```
 
 ### Database
 
-The project uses SQLite with Prisma. The schema includes:
+The project uses PostgreSQL with Drizzle ORM. The schema includes:
 
 - **Users** - User accounts with authentication
 - **Sessions** - Token-based session management

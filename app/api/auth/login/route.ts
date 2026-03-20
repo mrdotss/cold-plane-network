@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { prisma } from "@/lib/db/client";
+import { db } from "@/lib/db/client";
+import { users, auditEvents } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 import { verifyPassword } from "@/lib/auth/password";
 import { createSession } from "@/lib/auth/session";
 import {
@@ -39,12 +41,13 @@ export async function POST(request: Request) {
       );
     }
 
-    const user = await prisma.user.findUnique({
-      where: { username },
-    });
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.username, username))
+      .limit(1);
 
     if (!user) {
-      // Log failure — fire-and-forget
       logFailure(null, username, ip, request.headers.get("user-agent"));
       return NextResponse.json(
         { error: GENERIC_ERROR },
@@ -71,14 +74,12 @@ export async function POST(request: Request) {
 
     // Log success
     try {
-      await prisma.auditEvent.create({
-        data: {
-          userId: user.id,
-          eventType: "AUTH_LOGIN_SUCCESS",
-          metadata: JSON.stringify({ username }),
-          ipAddress: ip !== "unknown" ? ip : null,
-          userAgent: request.headers.get("user-agent") ?? null,
-        },
+      await db.insert(auditEvents).values({
+        userId: user.id,
+        eventType: "AUTH_LOGIN_SUCCESS",
+        metadata: JSON.stringify({ username }),
+        ipAddress: ip !== "unknown" ? ip : null,
+        userAgent: request.headers.get("user-agent") ?? null,
       });
     } catch {
       // Audit write failure should not block login
@@ -103,18 +104,16 @@ function logFailure(
 ) {
   // Fire-and-forget — we don't await this
   if (userId) {
-    prisma.auditEvent
-      .create({
-        data: {
-          userId,
-          eventType: "AUTH_LOGIN_FAILURE",
-          metadata: JSON.stringify({
-            username,
-            reason: "Invalid credentials",
-          }),
-          ipAddress: ip !== "unknown" ? ip : null,
-          userAgent: userAgent ?? null,
-        },
+    db.insert(auditEvents)
+      .values({
+        userId,
+        eventType: "AUTH_LOGIN_FAILURE",
+        metadata: JSON.stringify({
+          username,
+          reason: "Invalid credentials",
+        }),
+        ipAddress: ip !== "unknown" ? ip : null,
+        userAgent: userAgent ?? null,
       })
       .catch(() => {});
   }

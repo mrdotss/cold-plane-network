@@ -31,7 +31,7 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # env files (can opt-in for committing if needed)
-.env*
+.env
 
 # vercel
 .vercel
@@ -39,15 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-
-<<<<<<< Updated upstream
-# Database
-*.db
-*.sqlite
-*.sqlite3
-dev.db
-dev.db-shm
-dev.db-wal
 
 # IDE
 .vscode/
@@ -66,8 +57,4 @@ logs/
 .cache/
 .turbo/
 .kiro/
-=======
-# exception stuff
-*.db
-*.png
->>>>>>> Stashed changes
+.claude/

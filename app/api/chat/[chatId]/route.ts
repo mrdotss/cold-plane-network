@@ -1,0 +1,81 @@
+import { NextResponse } from "next/server";
+import { requireAuth, AuthError } from "@/lib/auth/middleware";
+import { writeAuditEvent } from "@/lib/audit/writer";
+import { getChat, deleteChat } from "@/lib/chat/queries";
+
+/**
+ * GET /api/chat/[chatId]
+ * Returns chat metadata + all messages in chronological order.
+ * Owner-only: scoped to authenticated user.
+ */
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ chatId: string }> },
+) {
+  try {
+    const { userId } = await requireAuth();
+    const { chatId } = await params;
+
+    const result = await getChat(chatId, userId);
+    if (!result) {
+      return NextResponse.json(
+        { error: "Chat not found" },
+        { status: 404 },
+      );
+    }
+
+    return NextResponse.json({
+      chat: result.chat,
+      messages: result.messages,
+    });
+  } catch (err) {
+    if (err instanceof AuthError) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    return NextResponse.json(
+      { error: "Failed to fetch chat" },
+      { status: 500 },
+    );
+  }
+}
+
+/**
+ * DELETE /api/chat/[chatId]
+ * Deletes chat and cascade-deletes all messages.
+ * Owner-only: scoped to authenticated user.
+ * Logs CHAT_DELETED audit event.
+ */
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ chatId: string }> },
+) {
+  try {
+    const { userId } = await requireAuth();
+    const { chatId } = await params;
+
+    const deleted = await deleteChat(chatId, userId);
+    if (!deleted) {
+      return NextResponse.json(
+        { error: "Chat not found" },
+        { status: 404 },
+      );
+    }
+
+    // Audit: chat deleted (non-blocking)
+    writeAuditEvent({
+      userId,
+      eventType: "CHAT_DELETED",
+      metadata: { chatId },
+    }).catch(() => {});
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    if (err instanceof AuthError) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    return NextResponse.json(
+      { error: "Failed to delete chat" },
+      { status: 500 },
+    );
+  }
+}

@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const createReportSchema = z.object({
   fileName: z.string().min(1),
-  reportType: z.enum(["report", "recommend", "full"]),
+  reportType: z.enum(["report"]),
   region: z.string().default(""),
   totalMonthly: z.number().min(0).default(0),
   totalAnnual: z.number().min(0).default(0),
@@ -20,7 +20,12 @@ export const autofillRequestSchema = z.object({
     serviceName: z.string().min(1),
     description: z.string(),
     region: z.string().min(1),
-    configurationSummary: z.string(),
+    properties: z.record(z.string(), z.string()).default({}),
+    currentPricing: z.object({
+      monthly: z.string(),
+      upfront: z.string(),
+      twelve_months: z.string(),
+    }).optional(),
   })).min(1).max(100),
   inputTier: z.enum(["onDemand", "ri1Year", "ri3Year"]),
   missingTiers: z.array(z.enum(["onDemand", "ri1Year", "ri3Year"])).min(1).max(3),

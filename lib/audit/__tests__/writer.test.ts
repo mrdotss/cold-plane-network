@@ -5,14 +5,17 @@ import { AUDIT_EVENT_TYPES } from "../events";
 // Mock server-only to allow importing in test environment
 vi.mock("server-only", () => ({}));
 
-// Mock Prisma client
-const mockCreate = vi.fn().mockResolvedValue({});
+// Mock Drizzle client
+const mockValues = vi.fn().mockResolvedValue(undefined);
+const mockInsert = vi.fn().mockReturnValue({ values: mockValues });
 vi.mock("@/lib/db/client", () => ({
-  prisma: {
-    auditEvent: {
-      create: (...args: unknown[]) => mockCreate(...args),
-    },
+  db: {
+    insert: (...args: unknown[]) => mockInsert(...args),
   },
+}));
+
+vi.mock("@/lib/db/schema", () => ({
+  auditEvents: { __table: "audit_events" },
 }));
 
 import { writeAuditEvent } from "../writer";
@@ -20,15 +23,16 @@ import { writeAuditEvent } from "../writer";
 const validEventTypes = new Set<string>(AUDIT_EVENT_TYPES);
 
 /**
- * Feature: cold-plane-mvp, Property 9: Audit event type validation
- * Validates: Requirements 9.6
+ * Feature: sizing-v2-chatbot, Property 9: Audit event type validation
+ * Validates: Requirements 2.5
  *
  * For any string that is not in the valid event type set,
  * the writeAuditEvent function SHALL reject the event.
  */
 describe("Property 9: Audit event type validation", () => {
   beforeEach(() => {
-    mockCreate.mockClear();
+    mockInsert.mockClear();
+    mockValues.mockClear();
   });
 
   it("rejects any string not in the valid event type set", async () => {
@@ -47,8 +51,8 @@ describe("Property 9: Audit event type validation", () => {
             })
           ).rejects.toThrow("Invalid audit event type");
 
-          // Prisma create should NOT have been called
-          expect(mockCreate).not.toHaveBeenCalled();
+          // DB insert should NOT have been called
+          expect(mockValues).not.toHaveBeenCalled();
         }
       ),
       { numRuns: 100 }
@@ -60,13 +64,14 @@ describe("Property 9: Audit event type validation", () => {
       fc.asyncProperty(
         fc.constantFrom(...AUDIT_EVENT_TYPES),
         async (validType) => {
-          mockCreate.mockClear();
+          mockInsert.mockClear();
+          mockValues.mockClear();
           await writeAuditEvent({
             userId: "test-user",
             eventType: validType,
             metadata: {},
           });
-          expect(mockCreate).toHaveBeenCalledOnce();
+          expect(mockValues).toHaveBeenCalledOnce();
         }
       ),
       { numRuns: 100 }

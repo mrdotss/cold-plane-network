@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { requireAuth, AuthError } from "@/lib/auth/middleware";
 import { writeAuditEvent } from "@/lib/audit/writer";
-import { prisma } from "@/lib/db/client";
+import { db } from "@/lib/db/client";
+import { projects, azureResources } from "@/lib/db/schema";
+import { eq, and, desc } from "drizzle-orm";
 import { manualResourceSchema, importJsonSchema } from "@/lib/validators/resource";
 import { normalizeResource } from "@/lib/import-utils";
 
@@ -16,17 +18,21 @@ export async function GET(
     const { userId } = await requireAuth();
     const { projectId } = await params;
 
-    const project = await prisma.project.findFirst({
-      where: { id: projectId, createdById: userId },
-    });
+    const [project] = await db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(and(eq(projects.id, projectId), eq(projects.createdById, userId)))
+      .limit(1);
+
     if (!project) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const resources = await prisma.azureResource.findMany({
-      where: { projectId },
-      orderBy: { createdAt: "desc" },
-    });
+    const resources = await db
+      .select()
+      .from(azureResources)
+      .where(eq(azureResources.projectId, projectId))
+      .orderBy(desc(azureResources.createdAt));
 
     return NextResponse.json({ data: resources });
   } catch (err) {
@@ -49,9 +55,12 @@ export async function POST(
     const { userId } = await requireAuth();
     const { projectId } = await params;
 
-    const project = await prisma.project.findFirst({
-      where: { id: projectId, createdById: userId },
-    });
+    const [project] = await db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(and(eq(projects.id, projectId), eq(projects.createdById, userId)))
+      .limit(1);
+
     if (!project) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
@@ -69,9 +78,10 @@ export async function POST(
       }
 
       const normalized = normalizeResource(parsed.data as Record<string, unknown>);
-      const resource = await prisma.azureResource.create({
-        data: { projectId, ...normalized },
-      });
+      const [resource] = await db
+        .insert(azureResources)
+        .values({ projectId, ...normalized })
+        .returning();
 
       try {
         await writeAuditEvent({
@@ -97,19 +107,20 @@ export async function POST(
         normalizeResource(item)
       );
 
-      const created = await prisma.azureResource.createMany({
-        data: resources.map((r) => ({ projectId, ...r })),
-      });
+      const inserted = await db
+        .insert(azureResources)
+        .values(resources.map((r) => ({ projectId, ...r })))
+        .returning({ id: azureResources.id });
 
       try {
         await writeAuditEvent({
           userId,
           eventType: "MIGRATION_RESOURCE_IMPORT",
-          metadata: { projectId, resourceCount: created.count },
+          metadata: { projectId, resourceCount: inserted.length },
         });
       } catch { /* audit failure non-blocking */ }
 
-      return NextResponse.json({ data: { count: created.count } }, { status: 201 });
+      return NextResponse.json({ data: { count: inserted.length } }, { status: 201 });
     }
 
     return NextResponse.json({ error: "Invalid mode. Use 'json' or 'manual'." }, { status: 400 });

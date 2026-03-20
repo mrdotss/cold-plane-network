@@ -3,7 +3,9 @@ import { requireAuth, AuthError } from "@/lib/auth/middleware";
 import { writeAuditEvent } from "@/lib/audit/writer";
 import { checkAuditLoggingLimit } from "@/lib/auth/rate-limit";
 import { isValidEventType } from "@/lib/audit/events";
-import { prisma } from "@/lib/db/client";
+import { db } from "@/lib/db/client";
+import { auditEvents } from "@/lib/db/schema";
+import { eq, and, gte, lte, desc, count } from "drizzle-orm";
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;
@@ -103,28 +105,34 @@ export async function GET(request: Request) {
     const fromDate = url.searchParams.get("from");
     const toDate = url.searchParams.get("to");
 
-    // Build where clause — always scoped to the authenticated user
-    const where: Record<string, unknown> = { userId };
+    // Build where conditions — always scoped to the authenticated user
+    const conditions = [eq(auditEvents.userId, userId)];
 
     if (eventTypeFilter && isValidEventType(eventTypeFilter)) {
-      where.eventType = eventTypeFilter;
+      conditions.push(eq(auditEvents.eventType, eventTypeFilter));
     }
 
-    if (fromDate || toDate) {
-      const createdAt: Record<string, Date> = {};
-      if (fromDate) createdAt.gte = new Date(fromDate);
-      if (toDate) createdAt.lte = new Date(toDate);
-      where.createdAt = createdAt;
+    if (fromDate) {
+      conditions.push(gte(auditEvents.createdAt, new Date(fromDate)));
+    }
+    if (toDate) {
+      conditions.push(lte(auditEvents.createdAt, new Date(toDate)));
     }
 
-    const [events, total] = await Promise.all([
-      prisma.auditEvent.findMany({
-        where,
-        orderBy: { createdAt: "desc" },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-      }),
-      prisma.auditEvent.count({ where }),
+    const whereClause = and(...conditions);
+
+    const [events, [{ total }]] = await Promise.all([
+      db
+        .select()
+        .from(auditEvents)
+        .where(whereClause)
+        .orderBy(desc(auditEvents.createdAt))
+        .offset((page - 1) * pageSize)
+        .limit(pageSize),
+      db
+        .select({ total: count() })
+        .from(auditEvents)
+        .where(whereClause),
     ]);
 
     return NextResponse.json({

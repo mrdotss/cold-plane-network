@@ -225,29 +225,28 @@ const pricingDataWithTierFlags = (
   ).chain(([fileName, currency]) => {
     const tierArbs = ALL_TIER_KEYS.map((key, i) => {
       const hasNonZero = tierFlags[i];
+      const baseSvc = {
+        groupHierarchy: fc.string({ minLength: 1, maxLength: 20 }),
+        region: fc.string({ minLength: 1, maxLength: 20 }),
+        description: fc.string({ maxLength: 30 }),
+        serviceName: fc.string({ minLength: 1, maxLength: 20 }),
+        specification: fc.string({ maxLength: 20 }),
+        currency: fc.constant(currency),
+        configurationSummary: fc.string({ maxLength: 30 }),
+        properties: fc.constant({} as Record<string, string>),
+      };
       const svcArb = hasNonZero
         ? fc.record({
-            groupHierarchy: fc.string({ minLength: 1, maxLength: 20 }),
-            region: fc.string({ minLength: 1, maxLength: 20 }),
-            description: fc.string({ maxLength: 30 }),
-            serviceName: fc.string({ minLength: 1, maxLength: 20 }),
-            // At least one of monthly/upfront must be non-zero
+            ...baseSvc,
             upfront: fc.float({ min: 0, max: 10000, noNaN: true }),
             monthly: fc.float({ min: Math.fround(0.01), max: 10000, noNaN: true }),
             first12MonthsTotal: fc.float({ min: 0, max: 100000, noNaN: true }),
-            currency: fc.constant(currency),
-            configurationSummary: fc.string({ maxLength: 30 }),
           })
         : fc.record({
-            groupHierarchy: fc.string({ minLength: 1, maxLength: 20 }),
-            region: fc.string({ minLength: 1, maxLength: 20 }),
-            description: fc.string({ maxLength: 30 }),
-            serviceName: fc.string({ minLength: 1, maxLength: 20 }),
+            ...baseSvc,
             upfront: fc.constant(0),
             monthly: fc.constant(0),
             first12MonthsTotal: fc.constant(0),
-            currency: fc.constant(currency),
-            configurationSummary: fc.string({ maxLength: 30 }),
           });
 
       return fc.array(svcArb, { minLength: 1, maxLength: 3 }).map((services) => {
@@ -296,14 +295,14 @@ const pricingDataWithTierFlags = (
     );
   });
 
-describe("Property 1: Tier detection partitions all tiers", () => {
+describe("Property 4: Tier detection correctness", () => {
   /**
-   * **Validates: Requirements 1.1, 1.2, 1.4**
-   * For any PricingData object, calling detectPricingTiers SHALL return a
-   * TierDetectionResult where presentTiers and missingTiers are a partition of
-   * ["onDemand", "ri1Year", "ri3Year"] — their union equals all three tier keys,
-   * their intersection is empty, and a tier is in presentTiers if and only if
-   * that tier has at least one service with non-zero monthly or upfront values.
+   * // Feature: sizing-v2-chatbot, Property 4: Tier detection correctness
+   * **Validates: Requirements 3.3**
+   * For any valid PricingData where a tier has at least one service with non-zero
+   * monthly or upfront values, detectPricingTiers should classify that tier as "present".
+   * For any tier where all services have zero monthly and zero upfront, it should be
+   * classified as "missing".
    */
 
   it("partitions all three tiers with no overlap and full coverage", () => {
@@ -347,6 +346,93 @@ describe("Property 1: Tier detection partitions all tiers", () => {
           });
         }
       ),
+      { numRuns: 100 }
+    );
+  });
+});
+
+
+describe("Property 5: Parser preserves Properties round-trip", () => {
+  /**
+   * // Feature: sizing-v2-chatbot, Property 5: Parser preserves Properties round-trip
+   * **Validates: Requirements 4.3, 4.6**
+   * For any valid AWS Pricing Calculator JSON containing services with a Properties
+   * object, parsing the JSON into PricingData should preserve all property keys and
+   * values in the resulting PricingService.properties field.
+   */
+
+  /** Generate a Properties object with realistic AWS-style key-value pairs. */
+  const propertiesArb = fc.dictionary(
+    fc.stringMatching(/^[A-Za-z][A-Za-z0-9 ()-]{0,29}$/),
+    fc.stringMatching(/^[A-Za-z0-9][A-Za-z0-9 ./-]{0,29}$/),
+    { minKeys: 1, maxKeys: 8 }
+  );
+
+  /** Generate an AWS-format service with Properties. */
+  const awsServiceArb = fc.tuple(propertiesArb).chain(([properties]) =>
+    fc.record({
+      "Service Name": fc.stringMatching(/^[A-Za-z][A-Za-z0-9 ]{0,19}$/),
+      "Region": fc.constantFrom("US East (N. Virginia)", "EU (Ireland)", "Asia Pacific (Tokyo)"),
+      "Description": fc.string({ maxLength: 30 }),
+      "Properties": fc.constant(properties),
+      "Service Cost": fc.record({
+        upfront: fc.float({ min: 0, max: 10000, noNaN: true }),
+        monthly: fc.float({ min: 0, max: 10000, noNaN: true }),
+        "12 months": fc.float({ min: 0, max: 100000, noNaN: true }),
+      }),
+    })
+  );
+
+  const awsEstimateArb = fc.record({
+    Name: fc.string({ minLength: 1, maxLength: 20 }),
+    Metadata: fc.record({ Currency: fc.constantFrom("USD", "EUR") }),
+    Groups: fc.array(
+      fc.record({
+        "Plan Name": fc.string({ minLength: 1, maxLength: 20 }),
+        Services: fc.array(awsServiceArb, { minLength: 1, maxLength: 3 }),
+      }),
+      { minLength: 1, maxLength: 2 }
+    ),
+  });
+
+  it("preserves all property keys and values from AWS JSON", () => {
+    fc.assert(
+      fc.property(awsEstimateArb, (estimate) => {
+        const jsonString = JSON.stringify(estimate);
+        const result = parsePricingJson(jsonString);
+        expect(result.success).toBe(true);
+        if (!result.success) return;
+
+        // Collect expected properties per service (flattened across groups)
+        const expectedProps: Record<string, string>[] = [];
+        for (const group of estimate.Groups) {
+          for (const svc of group.Services) {
+            const props: Record<string, string> = {};
+            for (const [k, v] of Object.entries(svc.Properties)) {
+              props[k] = String(v);
+            }
+            expectedProps.push(props);
+          }
+        }
+
+        // Check each tier's services have the correct properties
+        // All tiers share the same service list, so check On-Demand tier
+        const odTier = result.data.tiers.find((t) => t.tierName === "On-Demand");
+        expect(odTier).toBeDefined();
+        if (!odTier) return;
+
+        let svcIdx = 0;
+        for (const group of odTier.groups) {
+          for (const svc of group.services) {
+            const expected = expectedProps[svcIdx];
+            // Every key-value from the original Properties should be in svc.properties
+            for (const [key, val] of Object.entries(expected)) {
+              expect(svc.properties[key]).toBe(val);
+            }
+            svcIdx++;
+          }
+        }
+      }),
       { numRuns: 100 }
     );
   });

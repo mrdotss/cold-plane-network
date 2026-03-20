@@ -255,12 +255,21 @@ function normalizeGroup(g: unknown, fileDefaultStrategy: string): Record<string,
         pricing = {};
       }
 
+      // Preserve raw Properties as string-keyed record for autofill accuracy
+      const rawProperties: Record<string, string> = {};
+      if (properties && typeof properties === "object") {
+        for (const [k, v] of Object.entries(properties)) {
+          rawProperties[k] = String(v ?? "");
+        }
+      }
+
       services.push({
         serviceName,
         specification: extractSpecification(properties),
         region,
         description,
         configurationSummary,
+        properties: rawProperties,
         pricing,
       });
     }
@@ -408,12 +417,13 @@ export function parsePricingJson(jsonString: string): ParseResult {
           region: svc.region,
           description: svc.description ?? "",
           serviceName: svc.serviceName,
-          specification: (svc as Record<string, unknown>).specification as string ?? "",
+          specification: (svc as unknown as Record<string, unknown>).specification as string ?? "",
           upfront,
           monthly,
           first12MonthsTotal: first12,
           currency,
           configurationSummary: svc.configurationSummary ?? "",
+          properties: ((svc as unknown as Record<string, unknown>).properties as Record<string, string>) ?? {},
         };
 
         const groupMap = tierMap.get(tierKey)!;

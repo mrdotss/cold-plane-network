@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { requireAuth, AuthError } from "@/lib/auth/middleware";
 import { writeAuditEvent } from "@/lib/audit/writer";
 import { checkMappingEngineLimit } from "@/lib/auth/rate-limit";
-import { prisma } from "@/lib/db/client";
+import { db } from "@/lib/db/client";
+import { projects, azureResources, mappingRecommendations } from "@/lib/db/schema";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { findMapping } from "@/lib/mapping-engine";
 
 /**
@@ -16,20 +18,44 @@ export async function GET(
     const { userId } = await requireAuth();
     const { projectId } = await params;
 
-    const project = await prisma.project.findFirst({
-      where: { id: projectId, createdById: userId },
-    });
+    const [project] = await db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(and(eq(projects.id, projectId), eq(projects.createdById, userId)))
+      .limit(1);
+
     if (!project) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const resources = await prisma.azureResource.findMany({
-      where: { projectId },
-      include: { recommendations: true },
-      orderBy: { createdAt: "desc" },
-    });
+    const resources = await db
+      .select()
+      .from(azureResources)
+      .where(eq(azureResources.projectId, projectId))
+      .orderBy(desc(azureResources.createdAt));
 
-    return NextResponse.json({ data: resources });
+    const resourceIds = resources.map((r) => r.id);
+    const recs = resourceIds.length > 0
+      ? await db
+          .select()
+          .from(mappingRecommendations)
+          .where(inArray(mappingRecommendations.azureResourceId, resourceIds))
+      : [];
+
+    // Group recommendations by resource
+    const recsByResource = new Map<string, typeof recs>();
+    for (const rec of recs) {
+      const list = recsByResource.get(rec.azureResourceId) ?? [];
+      list.push(rec);
+      recsByResource.set(rec.azureResourceId, list);
+    }
+
+    const data = resources.map((r) => ({
+      ...r,
+      recommendations: recsByResource.get(r.id) ?? [],
+    }));
+
+    return NextResponse.json({ data });
   } catch (err) {
     if (err instanceof AuthError) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -69,25 +95,30 @@ export async function POST(
 
     const { projectId } = await params;
 
-    const project = await prisma.project.findFirst({
-      where: { id: projectId, createdById: userId },
-    });
+    const [project] = await db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(and(eq(projects.id, projectId), eq(projects.createdById, userId)))
+      .limit(1);
+
     if (!project) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const resources = await prisma.azureResource.findMany({
-      where: { projectId },
-    });
+    const resources = await db
+      .select()
+      .from(azureResources)
+      .where(eq(azureResources.projectId, projectId));
 
     if (resources.length === 0) {
       return NextResponse.json({ error: "No resources to map" }, { status: 400 });
     }
 
     // Delete existing recommendations for this project's resources
-    await prisma.mappingRecommendation.deleteMany({
-      where: { azureResource: { projectId } },
-    });
+    const resourceIds = resources.map((r) => r.id);
+    await db
+      .delete(mappingRecommendations)
+      .where(inArray(mappingRecommendations.azureResourceId, resourceIds));
 
     // Run mapping engine and persist recommendations
     const recommendations = [];
@@ -106,7 +137,7 @@ export async function POST(
       });
     }
 
-    await prisma.mappingRecommendation.createMany({ data: recommendations });
+    await db.insert(mappingRecommendations).values(recommendations);
 
     try {
       await writeAuditEvent({

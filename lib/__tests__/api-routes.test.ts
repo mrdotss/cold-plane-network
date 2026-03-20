@@ -20,27 +20,108 @@ vi.mock("@/lib/audit/writer", () => ({
   writeAuditEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
-// Must use vi.hoisted so the mock object is available when vi.mock factory runs
-const mockPrisma = vi.hoisted(() => ({
-  project: {
-    findMany: vi.fn(),
-    findFirst: vi.fn(),
-    create: vi.fn(),
-    delete: vi.fn(),
+// Mock rate-limit helpers
+vi.mock("@/lib/auth/rate-limit", () => ({
+  checkProjectCreationLimit: vi.fn().mockReturnValue({
+    allowed: true, remaining: 19, resetAt: Date.now() + 3600000,
+  }),
+  checkMappingEngineLimit: vi.fn().mockReturnValue({
+    allowed: true, remaining: 9, resetAt: Date.now() + 3600000,
+  }),
+}));
+
+// Mock mapping engine
+vi.mock("@/lib/mapping-engine", () => ({
+  findMapping: vi.fn().mockReturnValue({
+    awsServices: [{ service: "Amazon EC2", category: "Compute" }],
+    category: "Compute",
+    confidence: "High",
+    rationale: "Direct equivalent",
+    migrationNotes: "",
+    alternatives: [],
+  }),
+}));
+
+// Mock validators
+vi.mock("@/lib/validators/resource", () => ({
+  manualResourceSchema: {
+    safeParse: vi.fn().mockReturnValue({
+      success: true,
+      data: { name: "vm-1", type: "microsoft.compute/virtualmachines" },
+    }),
   },
-  azureResource: {
-    findMany: vi.fn(),
-    createMany: vi.fn(),
-    create: vi.fn(),
-  },
-  mappingRecommendation: {
-    deleteMany: vi.fn(),
-    createMany: vi.fn(),
+  importJsonSchema: {
+    safeParse: vi.fn().mockImplementation((data: unknown) => {
+      if (!Array.isArray(data)) {
+        return { success: false, error: { issues: [{ message: "Expected array" }] } };
+      }
+      return { success: true, data };
+    }),
   },
 }));
 
-vi.mock("@/lib/db/client", () => ({
-  prisma: mockPrisma,
+// Mock import-utils
+vi.mock("@/lib/import-utils", () => ({
+  normalizeResource: vi.fn().mockImplementation((r: Record<string, unknown>) => r),
+}));
+
+// ─── Drizzle chainable mock (hoisted) ────────────────────────────────────────
+
+const hoisted = vi.hoisted(() => {
+  const selectResults: unknown[][] = [];
+  const insertResults: unknown[][] = [];
+
+  function nextSelect(): unknown[] {
+    return selectResults.shift() ?? [];
+  }
+  function nextInsert(): unknown[] {
+    return insertResults.shift() ?? [];
+  }
+
+  /**
+   * Build a deeply-chainable object that resolves to `resultFn()` when awaited.
+   */
+  function chain(resultFn: () => unknown): Record<string, unknown> {
+    const obj: Record<string, unknown> = {};
+    const methods = [
+      "from", "where", "limit", "groupBy", "orderBy", "leftJoin",
+      "offset", "values", "returning",
+    ];
+    for (const m of methods) {
+      obj[m] = (..._args: unknown[]) => chain(resultFn);
+    }
+    obj.then = (
+      resolve: (v: unknown) => void,
+      reject?: (e: unknown) => void,
+    ) => {
+      try { resolve(resultFn()); } catch (e) { reject?.(e); }
+    };
+    return obj;
+  }
+
+  const mockDb = {
+    select: (..._args: unknown[]) => chain(nextSelect),
+    insert: (..._args: unknown[]) => chain(nextInsert),
+    delete: (..._args: unknown[]) => chain(() => undefined),
+  };
+
+  return { selectResults, insertResults, mockDb };
+});
+
+vi.mock("@/lib/db/client", () => ({ db: hoisted.mockDb }));
+
+vi.mock("@/lib/db/schema", () => ({
+  projects: { id: "id", name: "name", createdById: "createdById", createdAt: "createdAt", customerName: "customerName", notes: "notes", updatedAt: "updatedAt" },
+  azureResources: { id: "id", projectId: "projectId", createdAt: "createdAt", type: "type", name: "name" },
+  mappingRecommendations: { id: "id", azureResourceId: "azureResourceId" },
+}));
+
+vi.mock("drizzle-orm", () => ({
+  eq: vi.fn(),
+  and: vi.fn(),
+  desc: vi.fn(),
+  count: vi.fn(),
+  inArray: vi.fn(),
 }));
 
 import { GET as getProjects, POST as createProject } from "@/app/api/projects/route";
@@ -63,13 +144,17 @@ const makeParams = (projectId: string) => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  hoisted.selectResults.length = 0;
+  hoisted.insertResults.length = 0;
   (validateSession as ReturnType<typeof vi.fn>).mockResolvedValue({ userId: "user-1" });
 });
 
+// ─── Tests ───────────────────────────────────────────────────────────────────
+
 describe("Project routes", () => {
   it("GET /api/projects returns user projects", async () => {
-    mockPrisma.project.findMany.mockResolvedValue([
-      { id: "p1", name: "Test", createdById: "user-1", _count: { resources: 3 } },
+    hoisted.selectResults.push([
+      { id: "p1", name: "Test", createdById: "user-1", resourceCount: 3 },
     ]);
 
     const res = await getProjects();
@@ -77,15 +162,13 @@ describe("Project routes", () => {
 
     expect(res.status).toBe(200);
     expect(json.data).toHaveLength(1);
-    expect(mockPrisma.project.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { createdById: "user-1" } })
-    );
+    expect(json.data[0]._count.resources).toBe(3);
   });
 
   it("POST /api/projects creates a project", async () => {
-    mockPrisma.project.create.mockResolvedValue({
-      id: "p1", name: "New Project", customerName: "", notes: "", createdById: "user-1",
-    });
+    hoisted.insertResults.push([
+      { id: "p1", name: "New Project", customerName: "", notes: "", createdById: "user-1" },
+    ]);
 
     const res = await createProject(makeRequest({ name: "New Project" }));
     const json = await res.json();
@@ -109,8 +192,7 @@ describe("Project routes", () => {
 
 describe("Project delete route", () => {
   it("DELETE deletes owned project", async () => {
-    mockPrisma.project.findFirst.mockResolvedValue({ id: "p1", name: "Test", createdById: "user-1" });
-    mockPrisma.project.delete.mockResolvedValue({});
+    hoisted.selectResults.push([{ id: "p1", name: "Test", createdById: "user-1" }]);
 
     const res = await deleteProject(makeRequest(), makeParams("p1"));
     const json = await res.json();
@@ -120,7 +202,7 @@ describe("Project delete route", () => {
   });
 
   it("DELETE returns 404 for non-owned project", async () => {
-    mockPrisma.project.findFirst.mockResolvedValue(null);
+    hoisted.selectResults.push([]);
 
     const res = await deleteProject(makeRequest(), makeParams("p999"));
     expect(res.status).toBe(404);
@@ -129,8 +211,8 @@ describe("Project delete route", () => {
 
 describe("Resource routes", () => {
   it("GET returns resources for owned project", async () => {
-    mockPrisma.project.findFirst.mockResolvedValue({ id: "p1", createdById: "user-1" });
-    mockPrisma.azureResource.findMany.mockResolvedValue([
+    hoisted.selectResults.push([{ id: "p1" }]); // ownership check
+    hoisted.selectResults.push([
       { id: "r1", name: "vm-1", type: "microsoft.compute/virtualmachines" },
     ]);
 
@@ -142,8 +224,8 @@ describe("Resource routes", () => {
   });
 
   it("POST imports JSON resources", async () => {
-    mockPrisma.project.findFirst.mockResolvedValue({ id: "p1", createdById: "user-1" });
-    mockPrisma.azureResource.createMany.mockResolvedValue({ count: 2 });
+    hoisted.selectResults.push([{ id: "p1" }]); // ownership check
+    hoisted.insertResults.push([{ id: "r1" }, { id: "r2" }]);
 
     const res = await importResources(
       makeRequest({
@@ -153,7 +235,7 @@ describe("Resource routes", () => {
           { name: "storage-1", type: "microsoft.storage/storageaccounts" },
         ],
       }),
-      makeParams("p1")
+      makeParams("p1"),
     );
     const json = await res.json();
 
@@ -162,20 +244,20 @@ describe("Resource routes", () => {
   });
 
   it("POST rejects invalid JSON import", async () => {
-    mockPrisma.project.findFirst.mockResolvedValue({ id: "p1", createdById: "user-1" });
+    hoisted.selectResults.push([{ id: "p1" }]); // ownership check
 
     const res = await importResources(
       makeRequest({ mode: "json", data: "not-an-array" }),
-      makeParams("p1")
+      makeParams("p1"),
     );
     expect(res.status).toBe(400);
   });
 
   it("POST imports manual resource", async () => {
-    mockPrisma.project.findFirst.mockResolvedValue({ id: "p1", createdById: "user-1" });
-    mockPrisma.azureResource.create.mockResolvedValue({
-      id: "r1", name: "vm-1", type: "microsoft.compute/virtualmachines",
-    });
+    hoisted.selectResults.push([{ id: "p1" }]); // ownership check
+    hoisted.insertResults.push([
+      { id: "r1", name: "vm-1", type: "microsoft.compute/virtualmachines" },
+    ]);
 
     const res = await importResources(
       makeRequest({
@@ -183,7 +265,7 @@ describe("Resource routes", () => {
         name: "vm-1",
         type: "microsoft.compute/virtualmachines",
       }),
-      makeParams("p1")
+      makeParams("p1"),
     );
     const json = await res.json();
 
@@ -192,7 +274,7 @@ describe("Resource routes", () => {
   });
 
   it("returns 404 for non-owned project", async () => {
-    mockPrisma.project.findFirst.mockResolvedValue(null);
+    hoisted.selectResults.push([]);
 
     const res = await getResources(makeRequest(), makeParams("p999"));
     expect(res.status).toBe(404);
@@ -201,47 +283,45 @@ describe("Resource routes", () => {
 
 describe("Mapping routes", () => {
   it("GET returns resources with recommendations", async () => {
-    mockPrisma.project.findFirst.mockResolvedValue({ id: "p1", createdById: "user-1" });
-    mockPrisma.azureResource.findMany.mockResolvedValue([
-      {
-        id: "r1", name: "vm-1", type: "microsoft.compute/virtualmachines",
-        recommendations: [{ awsService: "Amazon EC2", confidence: "High" }],
-      },
-    ]);
+    hoisted.selectResults.push([{ id: "p1" }]); // ownership check
+    hoisted.selectResults.push([
+      { id: "r1", name: "vm-1", type: "microsoft.compute/virtualmachines" },
+    ]); // resources
+    hoisted.selectResults.push([
+      { azureResourceId: "r1", awsService: "Amazon EC2", confidence: "High" },
+    ]); // recommendations
 
     const res = await getMappings(makeRequest(), makeParams("p1"));
     const json = await res.json();
 
     expect(res.status).toBe(200);
     expect(json.data).toHaveLength(1);
+    expect(json.data[0].recommendations).toHaveLength(1);
   });
 
   it("POST runs mapping engine", async () => {
-    mockPrisma.project.findFirst.mockResolvedValue({ id: "p1", createdById: "user-1" });
-    mockPrisma.azureResource.findMany.mockResolvedValue([
+    hoisted.selectResults.push([{ id: "p1" }]); // ownership check
+    hoisted.selectResults.push([
       { id: "r1", name: "vm-1", type: "microsoft.compute/virtualmachines", kind: null, sku: null },
-    ]);
-    mockPrisma.mappingRecommendation.deleteMany.mockResolvedValue({});
-    mockPrisma.mappingRecommendation.createMany.mockResolvedValue({ count: 1 });
+    ]); // resources
 
     const res = await runMapping(makeRequest(), makeParams("p1"));
     const json = await res.json();
 
     expect(res.status).toBe(200);
     expect(json.data.mappedCount).toBe(1);
-    expect(mockPrisma.mappingRecommendation.createMany).toHaveBeenCalled();
   });
 
   it("POST returns 400 when no resources", async () => {
-    mockPrisma.project.findFirst.mockResolvedValue({ id: "p1", createdById: "user-1" });
-    mockPrisma.azureResource.findMany.mockResolvedValue([]);
+    hoisted.selectResults.push([{ id: "p1" }]); // ownership check
+    hoisted.selectResults.push([]); // empty resources
 
     const res = await runMapping(makeRequest(), makeParams("p1"));
     expect(res.status).toBe(400);
   });
 
   it("returns 404 for non-owned project", async () => {
-    mockPrisma.project.findFirst.mockResolvedValue(null);
+    hoisted.selectResults.push([]);
 
     const res = await getMappings(makeRequest(), makeParams("p999"));
     expect(res.status).toBe(404);

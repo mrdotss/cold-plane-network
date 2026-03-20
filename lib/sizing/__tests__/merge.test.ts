@@ -36,6 +36,7 @@ function buildPricingData(
       first12MonthsTotal: isPresent ? 700 : 0,
       currency,
       configurationSummary: "test config",
+      properties: {} as Record<string, string>,
     }));
     const subtotalUpfront = svcList.reduce((a, v) => a + v.upfront, 0);
     const subtotalMonthly = svcList.reduce((a, v) => a + v.monthly, 0);

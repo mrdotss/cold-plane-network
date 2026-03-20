@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { requireAuth, AuthError } from "@/lib/auth/middleware";
 import { writeAuditEvent } from "@/lib/audit/writer";
 import { checkProjectCreationLimit } from "@/lib/auth/rate-limit";
-import { prisma } from "@/lib/db/client";
+import { db } from "@/lib/db/client";
+import { projects, azureResources } from "@/lib/db/schema";
+import { eq, desc, count } from "drizzle-orm";
 
 /**
  * GET /api/projects — List projects for authenticated user (with resource count).
@@ -11,13 +13,29 @@ export async function GET() {
   try {
     const { userId } = await requireAuth();
 
-    const projects = await prisma.project.findMany({
-      where: { createdById: userId },
-      include: { _count: { select: { resources: true } } },
-      orderBy: { createdAt: "desc" },
-    });
+    const rows = await db
+      .select({
+        id: projects.id,
+        name: projects.name,
+        customerName: projects.customerName,
+        notes: projects.notes,
+        createdById: projects.createdById,
+        createdAt: projects.createdAt,
+        updatedAt: projects.updatedAt,
+        resourceCount: count(azureResources.id),
+      })
+      .from(projects)
+      .leftJoin(azureResources, eq(azureResources.projectId, projects.id))
+      .where(eq(projects.createdById, userId))
+      .groupBy(projects.id)
+      .orderBy(desc(projects.createdAt));
 
-    return NextResponse.json({ data: projects });
+    const data = rows.map((r) => ({
+      ...r,
+      _count: { resources: r.resourceCount },
+    }));
+
+    return NextResponse.json({ data });
   } catch (err) {
     if (err instanceof AuthError) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -63,14 +81,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Project name is required" }, { status: 400 });
     }
 
-    const project = await prisma.project.create({
-      data: {
+    const [project] = await db
+      .insert(projects)
+      .values({
         name: name.trim(),
         customerName: customerName?.trim() ?? "",
         notes: notes?.trim() ?? "",
         createdById: userId,
-      },
-    });
+      })
+      .returning();
 
     try {
       await writeAuditEvent({

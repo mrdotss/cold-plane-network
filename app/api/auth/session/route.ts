@@ -1,15 +1,22 @@
 import { NextResponse } from "next/server";
 import { requireAuth, AuthError } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db/client";
+import { db } from "@/lib/db/client";
+import { users } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 
 export async function GET() {
   try {
     const { userId } = await requireAuth();
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, username: true, createdAt: true },
-    });
+    const [user] = await db
+      .select({
+        id: users.id,
+        username: users.username,
+        createdAt: users.createdAt,
+      })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

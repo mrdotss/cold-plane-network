@@ -45,48 +45,67 @@ const TIER_DISPLAY: Record<string, string> = {
   ri3Year: "ri 3-year",
 };
 
-describe("Property 2: Autofill prompt contains all service details and strict JSON instruction", () => {
+describe("Property 6: Autofill prompt includes full properties", () => {
   /**
-   * **Validates: Requirements 3.4, 3.5**
-   * For any non-empty array of AutofillServiceInput objects, any valid inputTier,
-   * and any non-empty missingTiers array, calling buildAutofillPrompt SHALL produce
-   * a string that contains: (a) each service's serviceName, description, and region;
-   * (b) the input tier name; (c) each missing tier name; and (d) a strict-JSON instruction.
+   * // Feature: sizing-v2-chatbot, Property 6: Autofill prompt includes full properties
+   * **Validates: Requirements 4.4**
+   * For any list of AutofillServiceInput objects with non-empty properties maps,
+   * the string returned by buildAutofillPrompt should contain every property key
+   * and every property value from every service in the input.
    */
-  it("prompt contains all service details, tier names, and strict JSON instruction", () => {
+
+  /** Generate AutofillServiceInput with properties (new format). */
+  const serviceInputArb = fc.record({
+    serviceName: fc.stringMatching(/^[A-Za-z][A-Za-z0-9 ]{0,19}$/),
+    description: fc.stringMatching(/^[a-z][a-z0-9.]{0,9}$/),
+    region: fc.constantFrom("US East (N. Virginia)", "EU (Ireland)"),
+    properties: fc.dictionary(
+      fc.stringMatching(/^[A-Za-z][A-Za-z0-9 ]{0,14}$/),
+      fc.stringMatching(/^[a-z0-9][a-z0-9. ]{0,14}$/),
+      { minKeys: 1, maxKeys: 5 }
+    ),
+    currentPricing: fc.option(
+      fc.record({
+        monthly: fc.stringMatching(/^\d+\.\d{2}$/),
+        upfront: fc.stringMatching(/^\d+\.\d{2}$/),
+        twelve_months: fc.stringMatching(/^\d+\.\d{2}$/),
+      }),
+      { nil: undefined }
+    ),
+  });
+
+  it("prompt contains all property keys and values from every service", () => {
     fc.assert(
       fc.property(
-        fc.array(
-          fc.record({
-            serviceName: fc.stringMatching(/^[A-Za-z][A-Za-z0-9 ]{0,19}$/),
-            description: fc.stringMatching(/^[a-z][a-z0-9.]{0,9}$/),
-            region: fc.constantFrom("US East (N. Virginia)", "EU (Ireland)"),
-            configurationSummary: fc.string({ minLength: 1, maxLength: 30 }),
-          }),
-          { minLength: 1, maxLength: 5 }
-        ),
+        fc.array(serviceInputArb, { minLength: 1, maxLength: 5 }),
         fc.constantFrom(...VALID_TIERS),
         fc.subarray([...VALID_TIERS], { minLength: 1 }),
         (services, inputTier, missingTiers) => {
           const prompt = buildAutofillPrompt(services, inputTier, missingTiers);
 
-          // (a) Each service's details appear in the prompt
+          // Every service's name, description, and region appear
           for (const svc of services) {
             expect(prompt).toContain(svc.serviceName);
             expect(prompt).toContain(svc.description);
             expect(prompt).toContain(svc.region);
+
+            // Every property key and value appears in the prompt
+            for (const [key, val] of Object.entries(svc.properties)) {
+              expect(prompt).toContain(key);
+              expect(prompt).toContain(val);
+            }
           }
 
-          // (b) Input tier display name appears
+          // Input tier display name appears
           const lowerPrompt = prompt.toLowerCase();
           expect(lowerPrompt).toContain(TIER_DISPLAY[inputTier]);
 
-          // (c) Each missing tier display name appears
+          // Each missing tier display name appears
           for (const mt of missingTiers) {
             expect(lowerPrompt).toContain(TIER_DISPLAY[mt]);
           }
 
-          // (d) Strict JSON instruction
+          // Strict JSON instruction
           expect(prompt).toContain("Return ONLY valid JSON");
         }
       ),

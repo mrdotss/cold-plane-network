@@ -5,30 +5,6 @@
 ```
 app/
   layout.tsx              # Root layout (html/body, fonts, global providers)
-  page.tsx                # Landing / redirect (to be moved into route group)
-  globals.css
-  login/page.tsx          # Login page (shadcn block)
-  signup/page.tsx         # Signup page (shadcn block)
-  dashboard/page.tsx      # Dashboard home
-components/
-  ui/                     # shadcn primitives (button, card, input, etc.)
-  app-sidebar.tsx         # Sidebar shell
-  login-form.tsx          # Login form component
-  signup-form.tsx         # Signup form component
-  nav-*.tsx               # Navigation components
-hooks/                    # (empty — custom hooks go here)
-lib/
-  utils.ts                # cn() and shared utils
-public/                   # Static assets
-```
-
-## Route Group Convention
-
-MUST use Next.js Route Groups to separate public marketing pages from authenticated app pages:
-
-```
-app/
-  layout.tsx              # Root layout (html/body, fonts, global CSS)
   globals.css
   (marketing)/
     layout.tsx            # Marketing layout: no sidebar, no auth
@@ -37,48 +13,102 @@ app/
     layout.tsx            # App layout: sidebar + auth guard
     dashboard/
       page.tsx            # Dashboard home
-      studio/page.tsx     # Studio
-      audit/page.tsx      # Audit log
-      settings/page.tsx   # Settings
-  login/page.tsx          # Standalone (no route group)
-  signup/page.tsx         # Standalone (no route group)
-  api/                    # API routes (outside both groups)
+      sizing/page.tsx     # Sizing tool (report + chat)
+      studio/page.tsx     # Terraform Studio
+      migration/page.tsx  # Migration Advisor
+      cfm/page.tsx        # CFM Analysis
+      audit/page.tsx      # Audit log viewer
+      settings/page.tsx   # User settings
+  login/page.tsx          # Login page
+  signup/page.tsx         # Signup page
+  api/
+    auth/                 # Auth routes (login, register, logout, session)
+    audit/                # Audit event routes
+    dashboard/            # Dashboard data routes
+    projects/             # Migration project routes
+    sizing/               # Sizing report + autofill routes
+      route.ts            # GET (list), POST (create report)
+      autofill/route.ts   # POST (AI pricing autofill)
+    chat/                 # Chat routes
+      route.ts            # POST (send message, stream response)
+      [chatId]/route.ts   # GET (chat history), DELETE (remove chat)
+    files/
+      upload/route.ts     # POST (upload file attachment)
+components/
+  ui/                     # shadcn primitives (button, card, input, etc.)
+  sizing/                 # Sizing feature components
+  chat/                   # Chat feature components
+  audit/                  # Audit log components
+  dashboard/              # Dashboard layouts
+  marketing/              # Landing page components
+  studio/                 # Terraform Studio components
+  migration/              # Migration Advisor components
+hooks/                    # Custom React hooks
+lib/
+  db/                     # Drizzle ORM client + schema
+    client.ts             # Singleton Drizzle client (server-only)
+    schema.ts             # All table definitions (pg-core)
+    migrations/           # Drizzle-kit generated migrations
+  auth/                   # Authentication
+  audit/                  # Audit logging
+  sizing/                 # Sizing feature logic
+  chat/                   # Chat feature logic
+  export/                 # Export utilities
+  utils.ts                # cn() and shared utils
+public/                   # Static assets
+drizzle.config.ts         # Drizzle-kit configuration
 ```
+
+## Route Group Convention
+
+MUST use Next.js Route Groups to separate public marketing pages from authenticated app pages:
 
 - `(marketing)` layout MUST NOT check auth or render the sidebar.
 - `(app)` layout MUST validate the session and redirect to `/login` if unauthenticated.
 - Login/signup pages stay outside route groups to render with their own minimal layout.
 - API routes remain at `app/api/` — route groups do not affect API routing.
 
-## Required Routes (MVP)
+## Required Routes
 
 ### Pages
 
 | Route | Purpose |
 |-------|---------|
-| `app/dashboard/page.tsx` | Dashboard home (exists) |
-| `app/dashboard/studio/page.tsx` | Studio — editor + preview + artifacts |
-| `app/dashboard/audit/page.tsx` | Audit log viewer |
-| `app/dashboard/settings/page.tsx` | User settings (password change, preferences) |
+| `app/(app)/dashboard/page.tsx` | Dashboard home |
+| `app/(app)/dashboard/sizing/page.tsx` | Sizing — report generation + chatbot |
+| `app/(app)/dashboard/studio/page.tsx` | Studio — editor + preview + artifacts |
+| `app/(app)/dashboard/migration/page.tsx` | Migration Advisor |
+| `app/(app)/dashboard/cfm/page.tsx` | CFM Analysis |
+| `app/(app)/dashboard/audit/page.tsx` | Audit log viewer |
+| `app/(app)/dashboard/settings/page.tsx` | User settings |
 
 ### API Routes
 
 | Route | Methods | Purpose |
 |-------|---------|---------|
-| `app/api/auth/login/route.ts` | POST | Login (validate credentials, create session) |
-| `app/api/auth/register/route.ts` | POST | Register (create user, hash password) |
-| `app/api/auth/logout/route.ts` | POST | Logout (destroy session, clear cookie) |
-| `app/api/auth/session/route.ts` | GET | Validate current session (for client checks) |
-| `app/api/audit/route.ts` | POST, GET | POST: log audit event; GET: list events (paginated) |
+| `app/api/auth/login/route.ts` | POST | Login |
+| `app/api/auth/register/route.ts` | POST | Register |
+| `app/api/auth/logout/route.ts` | POST | Logout |
+| `app/api/auth/session/route.ts` | GET | Validate session |
+| `app/api/audit/route.ts` | POST, GET | Log / list audit events |
+| `app/api/sizing/route.ts` | GET, POST | List / create sizing reports |
+| `app/api/sizing/autofill/route.ts` | POST | AI pricing tier autofill |
+| `app/api/chat/route.ts` | POST | Send message, stream AI response |
+| `app/api/chat/[chatId]/route.ts` | GET, DELETE | Get chat history / delete chat |
+| `app/api/chat/list/route.ts` | GET | List user's chat conversations |
+| `app/api/files/upload/route.ts` | POST | Upload file attachment |
+| `app/api/projects/route.ts` | GET, POST | Migration projects |
 
-## Recommended Module Structure
+## Module Structure
 
 ### `lib/db/`
 
 ```
 lib/db/
-  client.ts               # Singleton Prisma client (server-only)
-  index.ts                # Re-export
+  client.ts               # Singleton Drizzle client (server-only, uses pg Pool)
+  schema.ts               # All table definitions using drizzle-orm/pg-core
+  migrations/             # Drizzle-kit generated SQL migrations
+  index.ts                # Re-export client + schema
 ```
 
 ### `lib/auth/`
@@ -88,6 +118,8 @@ lib/auth/
   password.ts             # hashPassword(), verifyPassword()
   session.ts              # createSession(), validateSession(), destroySession()
   middleware.ts            # requireAuth() helper for Route Handlers
+  cookie.ts               # Session cookie configuration
+  rate-limit.ts           # Login rate limiting
   index.ts
 ```
 
@@ -102,29 +134,52 @@ lib/audit/
   index.ts
 ```
 
-### `lib/spec/`
+### `lib/sizing/`
 
 ```
-lib/spec/
-  schema.ts               # Spec schema definition (Zod or similar)
-  parser.ts               # Parse raw spec text → structured AST/IR
-  validator.ts            # Validate parsed spec (semantic checks)
-  graph-builder.ts        # AST/IR → { nodes: Node[], edges: Edge[] }
-  generators/
-    terraform.ts          # Generate Terraform HCL from parsed spec
-    index.ts              # Re-export all generators
+lib/sizing/
+  agent-client.ts         # Azure AI Foundry agent calls (autofill + streaming)
+  parser.ts               # AWS pricing JSON parser
+  excel-generator.ts      # Excel workbook generation
+  merge.ts                # Autofill data merging
+  types.ts                # Type definitions
+  validators.ts           # Zod schemas
+  serializer.ts           # JSON round-trip
+  __tests__/              # Property-based tests
+```
+
+### `lib/chat/`
+
+```
+lib/chat/
+  agent-client.ts         # Azure AI Foundry chat agent (conversations API)
+  queries.ts              # DB queries: createChat, getChat, listChats, saveMessage, deleteChat
+  file-handler.ts         # File validation, temp storage, PDF text extraction
+  types.ts                # Chat type definitions (ChatMessage, ChatConversation, etc.)
   index.ts
 ```
 
-### `lib/topology/`
+### `components/sizing/`
 
 ```
-lib/topology/
-  layout.ts               # dagre auto-layout: nodes+edges → positioned nodes
-  node-types.ts           # React Flow custom node type definitions
-  edge-types.ts           # React Flow custom edge type definitions
-  utils.ts                # Graph diffing, fit-to-view helpers
-  index.ts
+components/sizing/
+  SizingPage.tsx           # Main sizing page layout (report panel + chat panel)
+  FileUpload.tsx           # JSON upload & parse
+  ReportPanel.tsx          # Generate Excel with autofill (formerly ReportTab)
+  AutofillProgress.tsx     # Loading animation
+```
+
+### `components/chat/`
+
+```
+components/chat/
+  ChatPanel.tsx            # Chat container with message list + input
+  ChatMessages.tsx         # Scrollable message list
+  ChatMessage.tsx          # Individual message bubble (user/assistant)
+  ChatInput.tsx            # Multimodal input (text + file attachments)
+  ChatSidebar.tsx          # Chat history list (past conversations)
+  FileAttachment.tsx       # File attachment preview chip
+  MarkdownRenderer.tsx     # Render AI markdown responses
 ```
 
 ### `components/studio/`
@@ -132,19 +187,9 @@ lib/topology/
 ```
 components/studio/
   StudioLayout.tsx         # 3-panel layout shell
-  editor/
-    SpecEditor.tsx         # Code editor tab (CodeMirror or Monaco)
-    SpecForm.tsx           # Form-based editor tab
-    EditorTabs.tsx         # Tab switcher (Editor | Form)
-  preview/
-    TopologyCanvas.tsx     # React Flow canvas wrapper
-    ResourceList.tsx       # Inventory / resource table below canvas
-    PreviewToolbar.tsx     # Validate, Generate, Share, Download buttons
-  output/
-    ArtifactViewer.tsx     # Generated Terraform / config viewer
-    DiagnosticsPanel.tsx   # Validation errors + warnings
-    DiffViewer.tsx         # Before/after diff (optional MVP)
-    OutputTabs.tsx         # Tab switcher (Artifacts | Diagnostics | Diff)
+  editor/                  # Spec editor components
+  preview/                 # Topology canvas components
+  output/                  # Artifact viewer components
 ```
 
 ### `components/audit/`
@@ -160,51 +205,40 @@ components/audit/
 
 ```
 components/marketing/
-  Navbar.tsx               # Sticky nav: logo + anchor links + CTA
-  Hero.tsx                 # Hero section with headline + CTA
-  Features.tsx             # Feature cards grid (3–4 cards)
+  Navbar.tsx               # Sticky nav
+  Hero.tsx                 # Hero section
+  Features.tsx             # Feature cards grid
   HowItWorks.tsx           # 3-step visual flow
-  DemoPreview.tsx          # Static/animated Studio preview placeholder
-  CTABanner.tsx            # Full-width call-to-action banner
-  Footer.tsx               # Minimal footer with links + attribution
-```
-
-### `components/topology/`
-
-```
-components/topology/
-  TopologyCanvas.tsx       # React Flow wrapper (pan/zoom/select/fit)
-  CustomNode.tsx           # Custom React Flow node component
-  CustomEdge.tsx           # Custom React Flow edge component
-  TopologyControls.tsx     # Fit-to-view, zoom controls overlay
-```
-
-### `lib/contracts/`
-
-```
-lib/contracts/
-  graph-ir.ts              # GraphNode, GraphEdge, GraphIR type definitions
-  artifact-manifest.ts     # ArtifactManifest, ArtifactFile type definitions
-  index.ts                 # Re-export all contract types
+  DemoPreview.tsx          # Studio preview placeholder
+  CTABanner.tsx            # Call-to-action banner
+  Footer.tsx               # Footer
 ```
 
 ## Client / Server Boundary Rules
 
-- `lib/db/*` — server-only. Add `"use server"` or `import "server-only"` guard.
+- `lib/db/*` — server-only. Add `import "server-only"` guard.
 - `lib/auth/*` — server-only.
 - `lib/audit/writer.ts` — server-only. `lib/audit/client.ts` — client-safe (fetch wrapper).
+- `lib/sizing/agent-client.ts` — server-only.
+- `lib/chat/agent-client.ts` — server-only.
+- `lib/chat/queries.ts` — server-only.
+- `lib/chat/file-handler.ts` — server-only.
 - `lib/spec/*` — client-side. No server imports.
 - `lib/topology/*` — client-side.
 - `components/studio/*` — client components (`"use client"`).
+- `components/chat/*` — client components (`"use client"`).
+- `components/sizing/*` — client components (`"use client"`).
 - `components/audit/*` — MAY be server components if data is fetched server-side.
-- UI components MUST NEVER import `@prisma/client` or any `lib/db/*` module.
+- UI components MUST NEVER import `drizzle-orm` or any `lib/db/*` module.
 
-## Prisma Schema Location
+## Drizzle Schema Location
 
 ```
-prisma/
-  schema.prisma            # User, Session, AuditEvent models
-  dev.db                   # SQLite file (gitignored)
+lib/db/
+  schema.ts               # All table definitions (users, sessions, audits, projects, sizing, chat)
+  client.ts               # Drizzle client singleton
+  migrations/             # SQL migration files
+drizzle.config.ts         # Config pointing to schema.ts + migrations/
 ```
 
 ## Multi-Root Workspace Rule
@@ -215,9 +249,8 @@ prisma/
 
 ## Assumptions & Open Questions
 
-- **Assumption**: `app/(app)/layout.tsx` will wrap all dashboard sub-routes with sidebar + auth guard.
+- **Assumption**: `app/(app)/layout.tsx` wraps all dashboard sub-routes with sidebar + auth guard.
 - **Assumption**: Studio is desktop-first; mobile layout is a non-goal for MVP.
-- **Assumption**: Route group migration from current flat `app/` structure is a one-time refactor early in implementation.
-- **Open**: Should `lib/spec/generators/` support pluggable generator registration, or hardcode Terraform only for MVP?
-- **Open**: Should the editor use CodeMirror (like React2AWS) or Monaco? CodeMirror is lighter; Monaco has richer LSP support.
-- **Open**: Should `components/studio/` follow the React2AWS pattern of co-located `index.tsx` barrel files per subfolder?
+- **Assumption**: Sizing page uses a split-panel layout (report left, chat right) on desktop.
+- **Resolved**: Route group migration from flat `app/` to `(marketing)` + `(app)` groups is complete.
+- **Resolved**: Migrated from Prisma/SQLite to Drizzle/PostgreSQL.

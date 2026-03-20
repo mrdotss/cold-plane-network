@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { requireAuth, AuthError } from "@/lib/auth/middleware";
 import { writeAuditEvent } from "@/lib/audit/writer";
-import { prisma } from "@/lib/db/client";
+import { db } from "@/lib/db/client";
+import { projects } from "@/lib/db/schema";
+import { eq, and } from "drizzle-orm";
 
 /**
  * DELETE /api/projects/[projectId] — Delete a project (owner only, cascade).
@@ -14,15 +16,17 @@ export async function DELETE(
     const { userId } = await requireAuth();
     const { projectId } = await params;
 
-    const project = await prisma.project.findFirst({
-      where: { id: projectId, createdById: userId },
-    });
+    const [project] = await db
+      .select()
+      .from(projects)
+      .where(and(eq(projects.id, projectId), eq(projects.createdById, userId)))
+      .limit(1);
 
     if (!project) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    await prisma.project.delete({ where: { id: projectId } });
+    await db.delete(projects).where(eq(projects.id, projectId));
 
     try {
       await writeAuditEvent({

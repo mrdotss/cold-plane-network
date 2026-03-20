@@ -15,7 +15,7 @@ function stripCodeFences(text: string): string {
 /**
  * POST /api/sizing/autofill
  * Ask the CPN Agent to provide missing pricing tiers.
- * Uses the same agent call pattern as /api/sizing/recommend (no MCP tool calls).
+ * Uses stateless agent call (store: false) — no MCP tool calls.
  */
 export async function POST(request: Request) {
   try {
@@ -48,38 +48,14 @@ export async function POST(request: Request) {
       // Audit failure must not block the primary operation
     }
 
-    // Build prompt and call agent (same pattern as recommend — no MCP tool calls)
     const prompt = buildAutofillPrompt(services, inputTier, missingTiers);
-
-    console.log("\n========== [sizing/autofill] REQUEST ==========");
-    console.log("Services count:", services.length);
-    console.log("Input tier:", inputTier);
-    console.log("Missing tiers:", missingTiers);
-    console.log("Services:", JSON.stringify(services, null, 2));
-    console.log("Prompt length:", prompt.length);
-    console.log("--- PROMPT START ---");
-    console.log(prompt);
-    console.log("--- PROMPT END ---");
-
     const rawResponse = await callAgentSync(prompt, "");
-
-    console.log("\n========== [sizing/autofill] RESPONSE ==========");
-    console.log("Raw response length:", rawResponse.length);
-    console.log("--- RAW RESPONSE START ---");
-    console.log(rawResponse);
-    console.log("--- RAW RESPONSE END ---");
-
     const cleaned = stripCodeFences(rawResponse);
-
-    console.log("--- CLEANED JSON START ---");
-    console.log(cleaned);
-    console.log("--- CLEANED JSON END ---");
 
     let agentData: AutofillResponse;
     try {
       agentData = JSON.parse(cleaned) as AutofillResponse;
     } catch {
-      console.error("[sizing/autofill] Failed to parse agent JSON");
       return NextResponse.json(
         { error: "Agent returned no valid pricing data" },
         { status: 422 }
@@ -87,11 +63,6 @@ export async function POST(request: Request) {
     }
 
     const results = agentData.services ?? [];
-
-    console.log("\n========== [sizing/autofill] PARSED ==========");
-    console.log("Parsed services count:", results.length);
-    console.log("Parsed services:", JSON.stringify(results, null, 2));
-    console.log("==============================================\n");
 
     if (results.length === 0 && services.length > 0) {
       return NextResponse.json(
@@ -107,7 +78,6 @@ export async function POST(request: Request) {
     }
 
     const message = err instanceof Error ? err.message : "Agent request failed";
-    console.error("[sizing/autofill] Agent error:", message);
 
     if (message.includes("not set")) {
       return NextResponse.json({ error: "Agent service unavailable" }, { status: 503 });

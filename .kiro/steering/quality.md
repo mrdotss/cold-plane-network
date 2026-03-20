@@ -34,6 +34,14 @@ A task is considered "done" when ALL of the following are true:
   - Empty metadata object is handled gracefully.
   - Nested objects with denylisted keys at depth > 1 are stripped.
 
+#### Drizzle Schema
+
+- MUST have unit tests covering:
+  - All table definitions in `lib/db/schema.ts` produce valid SQL via Drizzle introspection.
+  - Foreign key relationships (e.g., sessions → users, chatMessages → chats) are correctly defined.
+  - Default values and constraints (e.g., `createdAt` defaults, `NOT NULL`) are applied as expected.
+  - Schema changes are captured in migration files via `drizzle-kit generate`.
+
 ### Integration Tests
 
 #### Auth Routes
@@ -53,6 +61,23 @@ A task is considered "done" when ALL of the following are true:
   - `POST /api/audit` — oversized metadata is rejected or truncated.
   - `GET /api/audit` — returns paginated list, most recent first.
   - `GET /api/audit` — unauthenticated request returns 401.
+
+#### Chat Routes
+
+- MUST test:
+  - `POST /api/chat` — creates a new chat conversation and returns 201 with chatId.
+  - `POST /api/chat` — sending a message with chatId streams AI response via SSE.
+  - `GET /api/chat/[chatId]` — returns chat history with all messages in order.
+  - `DELETE /api/chat/[chatId]` — deletes chat and cascades to messages.
+  - `GET /api/chat/list` — returns paginated list of user's conversations.
+  - Message persistence: user and assistant messages are saved to DB after streaming completes.
+  - File attachments: uploaded files are referenced correctly in message metadata.
+  - Streaming: SSE stream delivers incremental tokens and completes cleanly.
+
+#### Sizing Autofill
+
+- Auto-fill accuracy tests MUST verify the full `properties` object (all resource properties) is sent to the AI agent, not just top-level service names.
+- MUST test that autofill responses are correctly merged into existing pricing data without data loss.
 
 ### E2E Smoke Test
 
@@ -91,7 +116,7 @@ A basic end-to-end test MUST cover this critical path:
 ## Assumptions & Open Questions
 
 - **Assumption**: Vitest is the preferred test runner; will add to devDependencies when testing begins.
-- **Assumption**: E2E tests run against a local dev server with a fresh SQLite DB.
+- **Assumption**: E2E tests run against a local dev server with a fresh PostgreSQL DB.
 - **Open**: Should we use `msw` (Mock Service Worker) for integration tests, or test against real Route Handlers?
 - **Open**: Should coverage thresholds be enforced in CI from day one, or introduced incrementally?
 - **Open**: Should we add visual regression testing (e.g., Playwright screenshots) for the Studio layout?

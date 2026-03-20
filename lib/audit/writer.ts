@@ -1,6 +1,7 @@
 import "server-only";
 
-import { prisma } from "@/lib/db/client";
+import { db } from "@/lib/db/client";
+import { auditEvents } from "@/lib/db/schema";
 import { type AuditEventInput, isValidEventType } from "./events";
 import { redactMetadata } from "./redact";
 
@@ -15,13 +16,11 @@ export async function writeAuditEvent(input: AuditEventInput): Promise<void> {
 
   const metadata = redactMetadata(input.eventType, input.metadata);
 
-  await prisma.auditEvent.create({
-    data: {
-      userId: input.userId,
-      eventType: input.eventType,
-      metadata,
-      ipAddress: input.ipAddress ?? null,
-      userAgent: input.userAgent ?? null,
-    },
+  await db.insert(auditEvents).values({
+    userId: input.userId,
+    eventType: input.eventType,
+    metadata,
+    ipAddress: input.ipAddress ?? null,
+    userAgent: input.userAgent ?? null,
   });
 }

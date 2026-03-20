@@ -1,18 +1,26 @@
 import "server-only";
 
-import { DefaultAzureCredential, ClientSecretCredential } from "@azure/identity";
+import { AIProjectClient } from "@azure/ai-projects";
+import {
+  DefaultAzureCredential,
+  ClientSecretCredential,
+} from "@azure/identity";
+import type { TokenCredential } from "@azure/identity";
+import type { AutofillServiceInput } from "./types";
 
+/**
+ * Azure AI Foundry scope for token acquisition.
+ * Project endpoints (*.services.ai.azure.com/api/projects/*) require the
+ * https://ai.azure.com audience — NOT the Cognitive Services audience.
+ */
 const AZURE_SCOPE = "https://ai.azure.com/.default";
 
 /**
- * Cached token state to avoid re-acquiring on every request.
- */
-let cachedToken: { token: string; expiresOn: number } | null = null;
-
-/**
  * Resolve the Azure credential based on available env vars.
+ * Prefers explicit ClientSecretCredential when all three vars are set,
+ * otherwise falls back to DefaultAzureCredential (managed identity, CLI, etc.).
  */
-function getCredential() {
+export function getCredential(): TokenCredential {
   const tenantId = process.env.AZURE_TENANT_ID;
   const clientId = process.env.AZURE_CLIENT_ID;
   const clientSecret = process.env.AZURE_CLIENT_SECRET;
@@ -24,53 +32,100 @@ function getCredential() {
 }
 
 /**
- * Acquire a bearer token for Azure AI Foundry.
- * Caches the token and refreshes 5 minutes before expiry.
+ * Create an AIProjectClient instance.
+ * Uses the AZURE_EXISTING_AIPROJECT_ENDPOINT env var.
  */
-export async function getAgentToken(): Promise<string> {
-  const now = Date.now();
-  if (cachedToken && cachedToken.expiresOn - now > 5 * 60 * 1000) {
-    return cachedToken.token;
+export function getClient(): AIProjectClient {
+  const endpoint = process.env.AZURE_EXISTING_AIPROJECT_ENDPOINT;
+  if (!endpoint) {
+    throw new Error(
+      "Agent service unavailable: AZURE_EXISTING_AIPROJECT_ENDPOINT not set"
+    );
   }
-
-  const credential = getCredential();
-  const tokenResponse = await credential.getToken(AZURE_SCOPE);
-
-  if (!tokenResponse?.token) {
-    throw new Error("Failed to acquire Azure AI token");
-  }
-
-  cachedToken = {
-    token: tokenResponse.token,
-    expiresOn: tokenResponse.expiresOnTimestamp,
-  };
-  return cachedToken.token;
+  return new AIProjectClient(endpoint, getCredential());
 }
 
 /**
- * Get the Foundry endpoint and agent name from env vars.
+ * Get a bearer token for Azure AI Foundry API calls.
+ * Uses getCredential() which prefers service principal, falls back to DefaultAzureCredential.
  */
-function getAgentConfig() {
-  const endpoint = process.env.AZURE_EXISTING_AIPROJECT_ENDPOINT;
-  const agentName = process.env.AZURE_EXISTING_AGENT_ID;
-
-  if (!endpoint) {
-    throw new Error("Agent service unavailable: AZURE_EXISTING_AIPROJECT_ENDPOINT not set");
+export async function getBearerToken(): Promise<string> {
+  const credential = getCredential();
+  const tokenResponse = await credential.getToken(AZURE_SCOPE);
+  if (!tokenResponse?.token) {
+    throw new Error("Failed to acquire Azure access token");
   }
-  if (!agentName) {
-    throw new Error("Agent service unavailable: AZURE_EXISTING_AGENT_ID not set");
-  }
-
-  return { endpoint: endpoint.replace(/\/+$/, ""), agentName };
+  return tokenResponse.token;
 }
 
-import type { AutofillServiceInput } from "./types";
+/**
+ * Get the base URL for Azure AI Foundry Responses API.
+ *
+ * Azure AI Foundry project endpoints use `/openai/v1/` path (no api-version query param).
+ * This was confirmed via endpoint testing — the `/v1` in the path IS the version.
+ */
+function getBaseURL(): string {
+  const endpoint = process.env.AZURE_EXISTING_AIPROJECT_ENDPOINT;
+  if (!endpoint) {
+    throw new Error(
+      "Agent service unavailable: AZURE_EXISTING_AIPROJECT_ENDPOINT not set"
+    );
+  }
+  return `${endpoint}/openai/v1`;
+}
+
+/**
+ * Make a direct fetch call to the Azure AI Foundry Responses API.
+ *
+ * We use fetch() directly instead of the OpenAI SDK because:
+ * - The SDK strips/transforms request body params for `responses.create()`
+ * - Azure AI Foundry agent_reference is not a standard OpenAI param
+ * - Direct fetch gives us full control over the exact request body
+ *
+ * Auth: Always uses Azure AD bearer tokens (OBO required for agent MCP tools).
+ * API keys are rejected: "Tools configured with OBO auth are not supported with API key authentication"
+ */
+async function agentFetch(
+  body: Record<string, unknown>,
+): Promise<globalThis.Response> {
+  const baseURL = getBaseURL();
+  const token = await getBearerToken();
+
+  return fetch(`${baseURL}/responses`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * Get the agent name from env vars.
+ */
+function getAgentName(): string {
+  const agentName = process.env.AZURE_EXISTING_AGENT_ID;
+  if (!agentName) {
+    throw new Error(
+      "Agent service unavailable: AZURE_EXISTING_AGENT_ID not set"
+    );
+  }
+  return agentName;
+}
+
+// ---------------------------------------------------------------------------
+// Prompt builders
+// ---------------------------------------------------------------------------
 
 /**
  * Build the prompt that combines pricing context with user description.
  * Exported for testing (Property 6).
  */
-export function buildAgentPrompt(pricingContext: string, userDescription: string): string {
+export function buildAgentPrompt(
+  pricingContext: string,
+  userDescription: string
+): string {
   return [
     "## AWS Pricing Calculator Export Data",
     pricingContext,
@@ -88,9 +143,9 @@ const TIER_DISPLAY: Record<string, string> = {
 
 /**
  * Build the autofill prompt that asks the CPN Agent to provide missing pricing tiers.
- * Uses the same approach as recommend — sends data as context, asks for structured response.
+ * Sends full service properties and current pricing for accuracy.
  * Does NOT instruct the agent to use MCP tools (avoids 429 rate limiting).
- * Exported for testing (Property 2).
+ * Exported for testing (Property 2 / Property 6).
  */
 export function buildAutofillPrompt(
   services: AutofillServiceInput[],
@@ -98,29 +153,48 @@ export function buildAutofillPrompt(
   missingTiers: string[]
 ): string {
   const serviceList = services
-    .map(
-      (s, i) =>
-        `${i + 1}. Service: ${s.serviceName}\n   Description: ${s.description}\n   Region: ${s.region}\n   Configuration: ${s.configurationSummary}`
-    )
-    .join("\n");
+    .map((s, i) => {
+      const propsLines = Object.entries(s.properties)
+        .map(([key, val]) => `     - ${key}: ${val}`)
+        .join("\n");
+      const currentPricingLine = s.currentPricing
+        ? `   Current Pricing (${TIER_DISPLAY[inputTier] ?? inputTier}): monthly=${s.currentPricing.monthly}, upfront=${s.currentPricing.upfront}, 12mo=${s.currentPricing.twelve_months}`
+        : "";
+      return [
+        `${i + 1}. Service: ${s.serviceName}`,
+        `   Description: ${s.description}`,
+        `   Region: ${s.region}`,
+        currentPricingLine,
+        `   Properties:`,
+        propsLines,
+      ]
+        .filter(Boolean)
+        .join("\n");
+    })
+    .join("\n\n");
 
-  const missingDisplay = missingTiers.map((t) => TIER_DISPLAY[t] ?? t).join(", ");
+  const missingDisplay = missingTiers
+    .map((t) => TIER_DISPLAY[t] ?? t)
+    .join(", ");
   const inputDisplay = TIER_DISPLAY[inputTier] ?? inputTier;
 
   return [
     "## Pricing Tier Lookup Request",
     "",
     `The uploaded AWS Pricing Calculator estimate uses the **${inputDisplay}** pricing tier.`,
-    `I need you to provide estimated pricing for the following missing tiers: **${missingDisplay}**.`,
+    `I need you to provide accurate pricing for the following missing tiers: **${missingDisplay}**.`,
     "",
-    "### Services",
+    "### Services with Full Specifications",
     "",
     serviceList,
     "",
     "### Instructions",
     "",
     `For each service listed above, provide the ${missingDisplay} pricing (upfront and monthly costs).`,
-    "Use your knowledge of AWS pricing to provide the best estimates.",
+    "IMPORTANT: Use the EXACT instance types, storage configurations, deployment options, operating systems, and license types from the Properties to look up accurate pricing.",
+    "For example, if Properties shows 'Instance type: db.m5.4xlarge' with 'Database edition: Standard' and 'License: License included', look up the RI pricing for that EXACT configuration, not a generic estimate.",
+    "For EC2, match the EXACT 'Advance EC2 instance' type (e.g., m5.xlarge) and 'Operating system' (e.g., Linux or Windows Server).",
+    "Include storage costs (EBS, gp3 IOPS/throughput) in the pricing where applicable.",
     "Return ONLY valid JSON with no markdown wrapping or code fences.",
     "Use the following response schema:",
     "",
@@ -145,32 +219,34 @@ export function buildAutofillPrompt(
   ].join("\n");
 }
 
-/**
- * Azure AI Foundry Agents use the OpenAI Responses API.
- * The agent is referenced by name via the `agent` field in the request body.
- *
- * REST endpoint: POST {endpoint}/openai/v1/responses?api-version=2025-05-15-preview
- * Body: { input: [...], agent: { name: "agent-name", type: "agent_reference" } }
- */
-
-interface ResponseOutput {
-  type: string;
-  content?: Array<{ type: string; text?: string }>;
-  text?: string;
-}
-
-interface ResponsesApiResult {
-  id: string;
-  status: string;
-  output: ResponseOutput[];
-  output_text?: string;
-}
+// ---------------------------------------------------------------------------
+// Agent calls via direct fetch (bypasses OpenAI SDK body transformation issues)
+// ---------------------------------------------------------------------------
 
 /**
- * Extract text from a Responses API result.
+ * Call the CPN Agent via the Responses API (non-streaming, stateless).
+ * Used for autofill pricing lookups.
+ * `store: false` ensures no conversation state is persisted in Azure.
  */
-function extractResponseText(data: ResponsesApiResult): string {
-  // output_text is a convenience field
+export async function callAgentSync(
+  prompt: string,
+  _userDescription: string = ""
+): Promise<string> {
+  const agentName = getAgentName();
+
+  const res = await agentFetch({
+    input: [{ role: "user", content: prompt }],
+    agent_reference: { name: agentName, type: "agent_reference" },
+    store: false,
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Agent call failed (${res.status}): ${errText.slice(0, 300)}`);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const data: any = await res.json();
   if (data.output_text) return data.output_text;
 
   // Fall back to parsing output array
@@ -192,42 +268,6 @@ function extractResponseText(data: ResponsesApiResult): string {
 }
 
 /**
- * Call the CPN Agent via the Responses API (non-streaming).
- * Returns the full agent response as a string.
- */
-export async function callAgentSync(
-  pricingContext: string,
-  userDescription: string
-): Promise<string> {
-  const token = await getAgentToken();
-  const { endpoint, agentName } = getAgentConfig();
-  const prompt = buildAgentPrompt(pricingContext, userDescription);
-
-  const url = `${endpoint}/openai/v1/responses?api-version=2025-05-15-preview`;
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      input: [{ role: "user", content: prompt }],
-      agent: { name: agentName, type: "agent_reference" },
-      store: false,
-    }),
-  });
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`Agent request failed (${res.status}): ${text}`);
-  }
-
-  const data: ResponsesApiResult = await res.json();
-  return extractResponseText(data);
-}
-
-/**
  * Call the CPN Agent via the Responses API (streaming).
  * Returns a ReadableStream that emits text chunks as they arrive.
  */
@@ -235,50 +275,43 @@ export async function callAgent(
   pricingContext: string,
   userDescription: string
 ): Promise<ReadableStream> {
-  const token = await getAgentToken();
-  const { endpoint, agentName } = getAgentConfig();
+  const agentName = getAgentName();
   const prompt = buildAgentPrompt(pricingContext, userDescription);
 
-  const url = `${endpoint}/openai/v1/responses?api-version=2025-05-15-preview`;
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      input: [{ role: "user", content: prompt }],
-      agent: { name: agentName, type: "agent_reference" },
-      stream: true,
-      store: false,
-    }),
+  const res = await agentFetch({
+    input: [{ role: "user", content: prompt }],
+    agent_reference: { name: agentName, type: "agent_reference" },
+    stream: true,
+    store: false,
   });
 
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`Agent request failed (${res.status}): ${text}`);
+    const errText = await res.text();
+    throw new Error(`Agent stream failed (${res.status}): ${errText.slice(0, 300)}`);
   }
 
   if (!res.body) {
-    throw new Error("Agent returned no response body");
+    throw new Error("Agent stream response has no body");
   }
 
-  // Transform SSE stream into plain text chunks
-  const decoder = new TextDecoder();
   const encoder = new TextEncoder();
 
+  // Parse SSE stream from Azure into plain text chunks
   return new ReadableStream({
     async start(controller) {
       const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
       try {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
 
-          const chunk = decoder.decode(value, { stream: true });
-          // Parse SSE events: lines starting with "data: "
-          const lines = chunk.split("\n");
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+
           for (const line of lines) {
             if (!line.startsWith("data: ")) continue;
             const payload = line.slice(6).trim();
@@ -286,12 +319,14 @@ export async function callAgent(
 
             try {
               const event = JSON.parse(payload);
-              // Extract text delta from streaming events
-              if (event.type === "response.output_text.delta" && event.delta) {
+              if (
+                event.type === "response.output_text.delta" &&
+                event.delta
+              ) {
                 controller.enqueue(encoder.encode(event.delta));
               }
             } catch {
-              // Not valid JSON — skip
+              // skip non-JSON lines
             }
           }
         }

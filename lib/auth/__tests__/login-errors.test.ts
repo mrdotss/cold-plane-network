@@ -13,14 +13,40 @@ vi.mock("next/headers", () => ({
   }),
 }));
 
-// Mock Prisma
-const mockFindUnique = vi.fn();
-const mockCreate = vi.fn();
+// In-memory user store for Drizzle mock
+let userStore: Array<{ id: string; username: string; passwordHash: string }> = [];
+
+// Mock Drizzle db
+const mockInsertValues = vi.fn().mockResolvedValue(undefined);
 vi.mock("@/lib/db/client", () => ({
-  prisma: {
-    user: { findUnique: (...args: unknown[]) => mockFindUnique(...args) },
-    auditEvent: { create: (...args: unknown[]) => mockCreate(...args) },
+  db: {
+    select: () => ({
+      from: () => ({
+        where: (condition: { _eqVal: string }) => ({
+          limit: () => {
+            const val = condition._eqVal;
+            const user = userStore.find((u) => u.username === val || u.id === val);
+            return Promise.resolve(user ? [user] : []);
+          },
+        }),
+      }),
+    }),
+    insert: () => ({
+      values: (...args: unknown[]) => {
+        mockInsertValues(...args);
+        return Promise.resolve();
+      },
+    }),
   },
+}));
+
+vi.mock("@/lib/db/schema", () => ({
+  users: { username: "username", id: "id" },
+  auditEvents: { __table: "audit_events" },
+}));
+
+vi.mock("drizzle-orm", () => ({
+  eq: (_col: unknown, val: unknown) => ({ _eqVal: val }),
 }));
 
 // Mock password verification
@@ -49,8 +75,8 @@ vi.mock("@/lib/auth/cookie", () => ({
 }));
 
 /**
- * Feature: cold-plane-mvp, Property 5: Generic error message for invalid credentials
- * Validates: Requirements 2.2
+ * Feature: sizing-v2-chatbot, Property 5: Generic error message for invalid credentials
+ * Validates: Requirements 2.6
  *
  * For any login attempt with an incorrect password and for any login attempt
  * with a non-existent username, the returned error message SHALL be identical
@@ -59,14 +85,11 @@ vi.mock("@/lib/auth/cookie", () => ({
 describe("Property 5: Generic error message for invalid credentials", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockCreate.mockResolvedValue({});
+    userStore = [];
   });
 
   it("non-existent username and wrong password return identical error", async () => {
-    // Dynamic import after mocks are set up
-    const { POST } = await import(
-      "@/app/api/auth/login/route"
-    );
+    const { POST } = await import("@/app/api/auth/login/route");
 
     await fc.assert(
       fc.asyncProperty(
@@ -74,7 +97,7 @@ describe("Property 5: Generic error message for invalid credentials", () => {
         fc.string({ minLength: 8, maxLength: 30 }),
         async (username, password) => {
           // Scenario 1: non-existent username
-          mockFindUnique.mockResolvedValueOnce(null);
+          userStore = [];
 
           const req1 = new Request("http://localhost/api/auth/login", {
             method: "POST",
@@ -86,11 +109,11 @@ describe("Property 5: Generic error message for invalid credentials", () => {
           const body1 = await res1.json();
 
           // Scenario 2: existing user, wrong password
-          mockFindUnique.mockResolvedValueOnce({
+          userStore = [{
             id: "user-1",
             username,
             passwordHash: "$2b$12$fakehash",
-          });
+          }];
           mockVerify.mockResolvedValueOnce(false);
 
           const req2 = new Request("http://localhost/api/auth/login", {

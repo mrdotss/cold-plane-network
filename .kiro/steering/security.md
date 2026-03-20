@@ -18,7 +18,7 @@
   - `SameSite`: MUST be `Lax` (or `Strict`).
   - `Path`: `/`.
   - `Max-Age`: SHOULD match session TTL (e.g., 7 days).
-- Session lookup MUST happen on every protected request (no trust-the-cookie-alone).
+- Session lookup via Drizzle MUST happen on every protected request (no trust-the-cookie-alone).
 
 ## Brute-Force Mitigation
 
@@ -64,6 +64,13 @@ These fields MUST NEVER appear in audit metadata:
 - In MVP, audit log rows MUST NOT be updated or deleted.
 - No `DELETE FROM audit_events` or `UPDATE audit_events` queries.
 - Future: add soft-delete or archival with retention policies.
+
+## Database Connection Security
+
+- Database connections MUST use SSL (`sslmode=require` in the connection string).
+- PostgreSQL credentials MUST be stored in the `DATABASE_URL` environment variable, never hardcoded.
+- `DATABASE_URL` MUST NOT appear in logs, audit metadata, or client-side code.
+- Connection pooling via `pg.Pool` MUST be configured with reasonable limits (e.g., `max: 10`).
 
 ## CSRF Protection
 

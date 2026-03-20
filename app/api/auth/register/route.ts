@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { prisma } from "@/lib/db/client";
+import { db } from "@/lib/db/client";
+import { users, auditEvents } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 import { hashPassword } from "@/lib/auth/password";
 import { createSession } from "@/lib/auth/session";
 import {
@@ -31,9 +33,12 @@ export async function POST(request: Request) {
     }
 
     // Check for existing user — return generic message to prevent enumeration
-    const existing = await prisma.user.findUnique({
-      where: { username },
-    });
+    const [existing] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.username, username))
+      .limit(1);
+
     if (existing) {
       return NextResponse.json(
         { error: "Registration failed" },
@@ -42,9 +47,10 @@ export async function POST(request: Request) {
     }
 
     const passwordHash = await hashPassword(password);
-    const user = await prisma.user.create({
-      data: { username, passwordHash },
-    });
+    const [user] = await db
+      .insert(users)
+      .values({ username, passwordHash })
+      .returning({ id: users.id, username: users.username });
 
     const { token, expiresAt } = await createSession(user.id);
 
@@ -56,17 +62,15 @@ export async function POST(request: Request) {
 
     // Log audit event (fire-and-forget — audit should not block registration)
     try {
-      await prisma.auditEvent.create({
-        data: {
-          userId: user.id,
-          eventType: "AUTH_REGISTER",
-          metadata: JSON.stringify({ username }),
-          ipAddress:
-            request.headers.get("x-forwarded-for") ??
-            request.headers.get("x-real-ip") ??
-            null,
-          userAgent: request.headers.get("user-agent") ?? null,
-        },
+      await db.insert(auditEvents).values({
+        userId: user.id,
+        eventType: "AUTH_REGISTER",
+        metadata: JSON.stringify({ username }),
+        ipAddress:
+          request.headers.get("x-forwarded-for") ??
+          request.headers.get("x-real-ip") ??
+          null,
+        userAgent: request.headers.get("user-agent") ?? null,
       });
     } catch {
       // Audit write failure should not block the user

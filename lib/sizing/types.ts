@@ -11,6 +11,8 @@ export interface PricingService {
   first12MonthsTotal: number;
   currency: string;
   configurationSummary: string;
+  /** Raw Properties from AWS JSON — preserved for autofill accuracy */
+  properties: Record<string, string>;
 }
 
 /** Represents a group of services with subtotals. */
@@ -72,7 +74,14 @@ export interface AutofillServiceInput {
   serviceName: string;
   description: string;
   region: string;
-  configurationSummary: string;
+  /** Full Properties object from AWS Pricing Calculator JSON */
+  properties: Record<string, string>;
+  /** Current pricing for this service in the uploaded tier */
+  currentPricing?: {
+    monthly: string;
+    upfront: string;
+    twelve_months: string;
+  };
 }
 
 /** Request body for POST /api/sizing/autofill. */

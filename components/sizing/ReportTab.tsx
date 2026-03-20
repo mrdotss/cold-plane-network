@@ -69,7 +69,12 @@ export function ReportTab({ pricingData, fileName }: ReportTabProps) {
               serviceName: svc.serviceName,
               description: svc.description,
               region: svc.region,
-              configurationSummary: svc.configurationSummary,
+              properties: svc.properties ?? {},
+              currentPricing: {
+                monthly: String(svc.monthly),
+                upfront: String(svc.upfront),
+                twelve_months: String(svc.first12MonthsTotal),
+              },
             });
           }
         }

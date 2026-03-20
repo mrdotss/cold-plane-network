@@ -1,7 +1,9 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { validateSession } from "@/lib/auth/session";
-import { prisma } from "@/lib/db/client";
+import { db } from "@/lib/db/client";
+import { projects, sizingReports, auditEvents } from "@/lib/db/schema";
+import { eq, desc, count } from "drizzle-orm";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -16,25 +18,27 @@ const SESSION_COOKIE_NAME = "session_token";
 
 async function getDashboardData(userId: string) {
   const [
-    projectCount,
-    sizingReportCount,
-    auditEventCount,
+    [{ projectCount }],
+    [{ sizingReportCount }],
+    [{ auditEventCount }],
     recentSizingReports,
     recentAuditEvents,
   ] = await Promise.all([
-    prisma.project.count({ where: { createdById: userId } }),
-    prisma.sizingReport.count({ where: { userId } }),
-    prisma.auditEvent.count({ where: { userId } }),
-    prisma.sizingReport.findMany({
-      where: { userId },
-      orderBy: { createdAt: "desc" },
-      take: 5,
-    }),
-    prisma.auditEvent.findMany({
-      where: { userId },
-      orderBy: { createdAt: "desc" },
-      take: 8,
-    }),
+    db.select({ projectCount: count() }).from(projects).where(eq(projects.createdById, userId)),
+    db.select({ sizingReportCount: count() }).from(sizingReports).where(eq(sizingReports.userId, userId)),
+    db.select({ auditEventCount: count() }).from(auditEvents).where(eq(auditEvents.userId, userId)),
+    db
+      .select()
+      .from(sizingReports)
+      .where(eq(sizingReports.userId, userId))
+      .orderBy(desc(sizingReports.createdAt))
+      .limit(5),
+    db
+      .select()
+      .from(auditEvents)
+      .where(eq(auditEvents.userId, userId))
+      .orderBy(desc(auditEvents.createdAt))
+      .limit(8),
   ]);
 
   const latestReport = recentSizingReports[0];

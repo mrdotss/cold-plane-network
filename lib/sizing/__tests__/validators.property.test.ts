@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import * as fc from "fast-check";
 import { createReportSchema } from "@/lib/sizing/validators";
 
-const VALID_REPORT_TYPES = ["report", "recommend", "full"];
+const VALID_REPORT_TYPES = ["report"];
 
 describe("Property 12: ReportType validation rejects invalid values", () => {
   /**

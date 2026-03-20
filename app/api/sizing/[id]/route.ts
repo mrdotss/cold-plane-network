@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireAuth, AuthError } from "@/lib/auth/middleware";
-import { prisma } from "@/lib/db/client";
+import { db } from "@/lib/db/client";
+import { sizingReports } from "@/lib/db/schema";
+import { eq, and } from "drizzle-orm";
 
 /**
  * GET /api/sizing/[id] — Get a single sizing report (must belong to authenticated user).
@@ -13,9 +15,11 @@ export async function GET(
     const { userId } = await requireAuth();
     const { id } = await params;
 
-    const report = await prisma.sizingReport.findFirst({
-      where: { id, userId },
-    });
+    const [report] = await db
+      .select()
+      .from(sizingReports)
+      .where(and(eq(sizingReports.id, id), eq(sizingReports.userId, userId)))
+      .limit(1);
 
     if (!report) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -41,15 +45,17 @@ export async function DELETE(
     const { userId } = await requireAuth();
     const { id } = await params;
 
-    const report = await prisma.sizingReport.findFirst({
-      where: { id, userId },
-    });
+    const [report] = await db
+      .select()
+      .from(sizingReports)
+      .where(and(eq(sizingReports.id, id), eq(sizingReports.userId, userId)))
+      .limit(1);
 
     if (!report) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    await prisma.sizingReport.delete({ where: { id } });
+    await db.delete(sizingReports).where(eq(sizingReports.id, id));
 
     return NextResponse.json({ data: { deleted: true } });
   } catch (err) {

@@ -191,6 +191,120 @@ Additional files (e.g., `main.tf`, `variables.tf`, per-resource configs) are gen
 - Consumers MUST check the version field and handle unknown versions gracefully (warn + best-effort, or reject).
 - Breaking changes to either contract MUST bump the version.
 
+## Chat Message Contract v1
+
+The Chat Message contract defines the shape of messages exchanged between the client,
+server, and database for the Sizing chatbot feature.
+
+### ChatMessage
+
+```ts
+interface ChatMessage {
+  /** Unique message ID (UUID). */
+  id: string;
+
+  /** Parent chat conversation ID (UUID). FK → chat.id. */
+  chatId: string;
+
+  /** Message author role. */
+  role: "user" | "assistant";
+
+  /** Message text content (markdown for assistant messages). */
+  content: string;
+
+  /** File attachments associated with this message. */
+  attachments: FileRef[];
+
+  /** ISO 8601 timestamp of message creation. */
+  createdAt: Date;
+}
+```
+
+### FileRef
+
+```ts
+interface FileRef {
+  /** Unique file ID (UUID, assigned on upload). */
+  id: string;
+
+  /** Original file name. */
+  name: string;
+
+  /** MIME type (e.g., "application/json", "application/pdf"). */
+  type: string;
+
+  /** File size in bytes. */
+  size: number;
+
+  /**
+   * Extracted text content (for PDF files).
+   * Populated server-side on upload via `pdf-parse`.
+   * undefined for non-PDF file types.
+   */
+  extractedText?: string;
+}
+```
+
+### Rules
+
+- `ChatMessage.attachments` MUST conform to `FileRef[]`. Empty array if no attachments.
+- `FileRef.extractedText` MUST only be populated for PDF files where extraction succeeded.
+- `FileRef.type` MUST be one of the allowed MIME types defined in `chatbot.md`.
+- `FileRef.size` MUST NOT exceed 10 MB (10,485,760 bytes).
+- Messages with `role: "assistant"` MUST NOT have attachments (only user messages attach files).
+
+## AutofillServiceInput v2
+
+The AutofillServiceInput contract defines the payload sent to the Azure AI Foundry agent
+for pricing auto-fill requests. v2 adds the full `properties` object and current pricing context.
+
+### Shape
+
+```ts
+interface AutofillServiceInput {
+  /** Schema version. */
+  version: "2";
+
+  /** AWS service name (e.g., "Amazon EC2", "Amazon RDS"). */
+  serviceName: string;
+
+  /**
+   * Full resource properties from the AWS pricing JSON.
+   * Keys are property names (e.g., "instanceType", "region", "operatingSystem").
+   * Values are the property values as strings.
+   * MUST include ALL properties for the service, not just top-level identifiers.
+   */
+  properties: Record<string, string>;
+
+  /**
+   * Current pricing data already known for this service.
+   * Allows the agent to fill gaps without re-deriving existing values.
+   * null/undefined if no pricing data exists yet.
+   */
+  currentPricing?: {
+    /** On-demand hourly price (USD). */
+    onDemandPrice?: number;
+    /** Reserved 1-year price (USD). */
+    reserved1YearPrice?: number;
+    /** Reserved 3-year price (USD). */
+    reserved3YearPrice?: number;
+    /** Currency code (default "USD"). */
+    currency?: string;
+  };
+}
+```
+
+### Rules
+
+- `properties` MUST contain the full set of resource properties from the AWS pricing JSON.
+  Sending only top-level service names results in inaccurate auto-fill.
+- `currentPricing` SHOULD be included when partial pricing data already exists, to avoid
+  overwriting user-confirmed values.
+- The agent response MUST be valid JSON conforming to the expected autofill output schema.
+- Autofill requests MUST use `store: false` (stateless) to avoid persisting pricing data
+  in Azure AI Foundry.
+- Autofill prompts MUST NOT instruct the agent to use MCP tools (avoids 429 rate limiting).
+
 ## Assumptions & Open Questions
 
 - **Assumption**: Graph IR and Artifact Manifest are client-side-only data structures; they are never persisted to the DB.

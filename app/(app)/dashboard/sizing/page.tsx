@@ -9,7 +9,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { SizingDashboard } from "@/components/sizing/SizingDashboard";
-import { SizingTabs } from "@/components/sizing/SizingTabs";
+import { SizingPage as SizingPageClient } from "@/components/sizing/SizingPage";
 
 export default function SizingPage() {
   return (
@@ -36,7 +36,7 @@ export default function SizingPage() {
       </header>
       <div className="flex flex-1 flex-col gap-6 p-4 pt-0">
         <SizingDashboard />
-        <SizingTabs />
+        <SizingPageClient />
       </div>
     </>
   );

@@ -24,6 +24,10 @@ export const AUDIT_EVENT_TYPES = [
   "SIZING_AGENT_RECOMMEND",
   "SIZING_DOWNLOAD_EXCEL",
   "SIZING_AGENT_AUTOFILL",
+  "CHAT_CREATED",
+  "CHAT_MESSAGE_SENT",
+  "CHAT_DELETED",
+  "CHAT_FILE_UPLOADED",
 ] as const;
 
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
@@ -52,6 +56,10 @@ export const METADATA_ALLOWLISTS: Record<AuditEventType, readonly string[]> = {
   SIZING_AGENT_RECOMMEND: ["reportType", "serviceCount", "promptLength"],
   SIZING_DOWNLOAD_EXCEL: ["reportId", "reportType"],
   SIZING_AGENT_AUTOFILL: ["reportType", "serviceCount", "inputTier", "filledTiers"],
+  CHAT_CREATED: ["chatId"],
+  CHAT_MESSAGE_SENT: ["chatId", "hasAttachments", "attachmentTypes"],
+  CHAT_DELETED: ["chatId"],
+  CHAT_FILE_UPLOADED: ["fileType", "fileSize"],
 } as const;
 
 export interface AuditEventInput {

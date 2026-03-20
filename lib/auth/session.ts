@@ -1,7 +1,9 @@
 import "server-only";
 
 import crypto from "crypto";
-import { prisma } from "@/lib/db/client";
+import { db } from "@/lib/db/client";
+import { sessions } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 
 const SESSION_TTL_DAYS = 7;
 
@@ -17,9 +19,7 @@ export async function createSession(
     Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000
   );
 
-  await prisma.session.create({
-    data: { token, userId, expiresAt },
-  });
+  await db.insert(sessions).values({ token, userId, expiresAt });
 
   return { token, expiresAt };
 }
@@ -27,13 +27,16 @@ export async function createSession(
 export async function validateSession(
   token: string
 ): Promise<{ userId: string } | null> {
-  const session = await prisma.session.findUnique({
-    where: { token },
-  });
+  const [session] = await db
+    .select()
+    .from(sessions)
+    .where(eq(sessions.token, token))
+    .limit(1);
 
   if (!session) return null;
+
   if (session.expiresAt < new Date()) {
-    await prisma.session.delete({ where: { id: session.id } });
+    await db.delete(sessions).where(eq(sessions.id, session.id));
     return null;
   }
 
@@ -41,5 +44,5 @@ export async function validateSession(
 }
 
 export async function destroySession(token: string): Promise<void> {
-  await prisma.session.deleteMany({ where: { token } });
+  await db.delete(sessions).where(eq(sessions.token, token));
 }
