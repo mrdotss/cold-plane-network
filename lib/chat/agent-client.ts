@@ -74,11 +74,11 @@ export async function streamChatResponse(
   const token = await getBearerToken();
   const encoder = new TextEncoder();
 
-  const input: Array<{ role: string; content: string }> = [];
+  const input: Array<{ type: string; role: string; content: string }> = [];
   if (systemContext) {
-    input.push({ role: "system", content: systemContext });
+    input.push({ type: "message", role: "developer", content: systemContext });
   }
-  input.push({ role: "user", content: message });
+  input.push({ type: "message", role: "user", content: message });
 
   // Build the request body — direct fetch, no SDK transformation
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
