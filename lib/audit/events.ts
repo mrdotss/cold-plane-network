@@ -28,6 +28,11 @@ export const AUDIT_EVENT_TYPES = [
   "CHAT_MESSAGE_SENT",
   "CHAT_DELETED",
   "CHAT_FILE_UPLOADED",
+  "CFM_ACCOUNT_CONNECTED",
+  "CFM_ACCOUNT_DELETED",
+  "CFM_SCAN_STARTED",
+  "CFM_SCAN_COMPLETED",
+  "CFM_REPORT_EXPORTED",
 ] as const;
 
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
@@ -60,6 +65,11 @@ export const METADATA_ALLOWLISTS: Record<AuditEventType, readonly string[]> = {
   CHAT_MESSAGE_SENT: ["chatId", "hasAttachments", "attachmentTypes"],
   CHAT_DELETED: ["chatId"],
   CHAT_FILE_UPLOADED: ["fileType", "fileSize"],
+  CFM_ACCOUNT_CONNECTED: ["accountId", "awsAccountId"],
+  CFM_ACCOUNT_DELETED: ["accountId"],
+  CFM_SCAN_STARTED: ["scanId", "accountId", "services", "regions"],
+  CFM_SCAN_COMPLETED: ["scanId", "totalSavings", "recommendationCount"],
+  CFM_REPORT_EXPORTED: ["scanId", "format"],
 } as const;
 
 export interface AuditEventInput {

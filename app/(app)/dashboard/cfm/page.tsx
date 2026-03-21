@@ -1,4 +1,3 @@
-import Link from "next/link";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -9,12 +8,47 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { AiInnovation01Icon } from "@hugeicons/core-free-icons";
+import { CfmLanding } from "@/components/cfm/CfmLanding";
+import type { SerializedAccountWithScan } from "@/components/cfm/CfmLanding";
+import { getAccountsByUser, getLatestScanForAccount } from "@/lib/cfm/queries";
+import { requireAuth } from "@/lib/auth/middleware";
+import { redirect } from "next/navigation";
+import type { CfmScanSummary } from "@/lib/cfm/types";
 
-export default function CfmPage() {
+export default async function CfmPage() {
+  let userId: string;
+  try {
+    const auth = await requireAuth();
+    userId = auth.userId;
+  } catch {
+    redirect("/login");
+  }
+
+  const accounts = await getAccountsByUser(userId);
+
+  // Serialize Date objects to ISO strings for the client component boundary
+  const accountsWithScans: SerializedAccountWithScan[] = await Promise.all(
+    accounts.map(async (account) => {
+      const latestScan = await getLatestScanForAccount(account.id);
+      return {
+        account: {
+          id: account.id,
+          userId: account.userId,
+          accountName: account.accountName,
+          awsAccountId: account.awsAccountId,
+          roleArn: account.roleArn,
+          externalId: account.externalId,
+          regions: account.regions as string[],
+          services: account.services as string[],
+          lastScanAt: account.lastScanAt?.toISOString() ?? null,
+          createdAt: account.createdAt.toISOString(),
+          updatedAt: account.updatedAt.toISOString(),
+        },
+        totalSavings: (latestScan?.summary as CfmScanSummary | null)?.totalPotentialSavings ?? 0,
+      };
+    })
+  );
+
   return (
     <>
       <header className="flex h-16 shrink-0 items-center gap-2">
@@ -37,27 +71,8 @@ export default function CfmPage() {
           </Breadcrumb>
         </div>
       </header>
-      <div className="flex flex-1 items-center justify-center p-4 pt-0">
-        <Card className="max-w-lg w-full text-center">
-          <CardHeader className="items-center">
-            <HugeiconsIcon
-              icon={AiInnovation01Icon}
-              strokeWidth={1.5}
-              className="size-12 text-muted-foreground mb-2"
-            />
-            <CardTitle>Coming Soon</CardTitle>
-            <CardDescription>
-              Cloud Financial Management analysis capabilities are under development.
-              Stay tuned for cost optimization insights, anomaly detection, and
-              financial reporting tools.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button variant="outline" asChild>
-              <Link href="/dashboard">Back to Dashboard</Link>
-            </Button>
-          </CardContent>
-        </Card>
+      <div className="min-w-[1280px]">
+        <CfmLanding initialAccounts={accountsWithScans} />
       </div>
     </>
   );

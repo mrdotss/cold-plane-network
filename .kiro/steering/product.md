@@ -1,3 +1,7 @@
+---
+inclusion: manual
+---
+
 # Cold Network Plane — Product Vision & Scope
 
 ## Vision

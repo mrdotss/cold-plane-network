@@ -7,7 +7,9 @@ import {
   real,
   integer,
   jsonb,
+  numeric,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 // ─── Users ───────────────────────────────────────────────────────────────────
@@ -183,4 +185,86 @@ export const chatMessages = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => [index("idx_chat_message_chat_id").on(t.chatId)],
+);
+
+
+// ─── CFM Accounts ────────────────────────────────────────────────────────────
+
+export const cfmAccounts = pgTable(
+  "cfm_accounts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id),
+    accountName: text("account_name").notNull(),
+    awsAccountId: varchar("aws_account_id", { length: 12 }).notNull(),
+    roleArn: text("role_arn").notNull(),
+    externalId: text("external_id"),
+    regions: jsonb("regions").notNull().$type<string[]>(),
+    services: jsonb("services").notNull().$type<string[]>(),
+    lastScanAt: timestamp("last_scan_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_cfm_accounts_user").on(t.userId),
+    uniqueIndex("idx_cfm_accounts_user_aws").on(t.userId, t.awsAccountId),
+  ],
+);
+
+// ─── CFM Scans ───────────────────────────────────────────────────────────────
+
+export const cfmScans = pgTable(
+  "cfm_scans",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => cfmAccounts.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id),
+    status: varchar("status", { length: 20 }).notNull().default("pending"),
+    summary: jsonb("summary"),
+    azureConversationId: text("azure_conversation_id"),
+    error: text("error"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    completedAt: timestamp("completed_at"),
+  },
+  (t) => [
+    index("idx_cfm_scans_account").on(t.accountId),
+    index("idx_cfm_scans_user_created").on(t.userId, t.createdAt),
+  ],
+);
+
+// ─── CFM Recommendations ─────────────────────────────────────────────────────
+
+export const cfmRecommendations = pgTable(
+  "cfm_recommendations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    scanId: uuid("scan_id")
+      .notNull()
+      .references(() => cfmScans.id, { onDelete: "cascade" }),
+    service: varchar("service", { length: 50 }).notNull(),
+    resourceId: text("resource_id").notNull(),
+    resourceName: text("resource_name"),
+    priority: varchar("priority", { length: 10 }).notNull(),
+    recommendation: text("recommendation").notNull(),
+    currentCost: numeric("current_cost", { precision: 12, scale: 2 })
+      .notNull()
+      .default("0"),
+    estimatedSavings: numeric("estimated_savings", { precision: 12, scale: 2 })
+      .notNull()
+      .default("0"),
+    effort: varchar("effort", { length: 10 }).notNull(),
+    metadata: jsonb("metadata").notNull().default("{}"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_cfm_rec_scan").on(t.scanId),
+    index("idx_cfm_rec_scan_service").on(t.scanId, t.service),
+    index("idx_cfm_rec_scan_priority").on(t.scanId, t.priority),
+  ],
 );
