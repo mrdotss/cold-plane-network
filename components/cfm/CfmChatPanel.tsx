@@ -281,14 +281,16 @@ export function CfmChatPanel(props: CfmChatPanelProps) {
         </div>
       )}
 
-      {/* Messages */}
+      {/* Messages — own scroll container */}
       {messages.length > 0 && (
-        <ChatMessages
-          messages={messages}
-          streamingMessageId={streamingMessageId}
-          onRemoveAttachment={handleRemoveAttachment}
-          onRetry={handleRetry}
-        />
+        <div className="min-h-0 flex-1 overflow-y-auto text-sm [&_p]:text-sm [&_li]:text-sm [&_.prose]:text-sm">
+          <ChatMessages
+            messages={messages}
+            streamingMessageId={streamingMessageId}
+            onRemoveAttachment={handleRemoveAttachment}
+            onRetry={handleRetry}
+          />
+        </div>
       )}
 
       {/* Input */}

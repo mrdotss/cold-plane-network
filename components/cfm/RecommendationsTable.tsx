@@ -118,27 +118,28 @@ export function RecommendationsTable({ recommendations }: RecommendationsTablePr
   return (
     <div className="flex flex-col gap-2">
       <h3 className="text-sm font-medium">Top Recommendations</h3>
+      <div className="overflow-x-auto rounded-md border">
       <Table>
         <TableHeader>
           <TableRow>
             <TableHead
-              className="cursor-pointer select-none"
+              className="w-[90px] cursor-pointer select-none"
               onClick={() => handleSort("priority")}
               aria-sort={sortField === "priority" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
             >
               Priority{sortIndicator("priority")}
             </TableHead>
-            <TableHead>Resource</TableHead>
+            <TableHead className="w-[180px]">Resource</TableHead>
             <TableHead>Recommendation</TableHead>
             <TableHead
-              className="cursor-pointer select-none text-right"
+              className="w-[130px] cursor-pointer select-none text-right"
               onClick={() => handleSort("estimatedSavings")}
               aria-sort={sortField === "estimatedSavings" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
             >
               Monthly Savings{sortIndicator("estimatedSavings")}
             </TableHead>
             <TableHead
-              className="cursor-pointer select-none"
+              className="w-[80px] cursor-pointer select-none"
               onClick={() => handleSort("effort")}
               aria-sort={sortField === "effort" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
             >
@@ -160,8 +161,8 @@ export function RecommendationsTable({ recommendations }: RecommendationsTablePr
                   )}
                 </div>
               </TableCell>
-              <TableCell className="max-w-[300px]">
-                <span className="text-xs">{rec.recommendation}</span>
+              <TableCell className="max-w-[400px]">
+                <span className="text-xs line-clamp-2">{rec.recommendation}</span>
               </TableCell>
               <TableCell className="text-right font-medium">
                 {formatCurrency(rec.estimatedSavings)}
@@ -173,6 +174,7 @@ export function RecommendationsTable({ recommendations }: RecommendationsTablePr
           ))}
         </TableBody>
       </Table>
+      </div>
     </div>
   );
 }

@@ -115,11 +115,10 @@ function getServiceColumns(service: string): ColumnDef[] {
           </div>
         ),
       },
-      { header: "Status", render: (r) => getMeta(r, "status") },
+      { header: "Status", className: "w-[100px]", render: (r) => getMeta(r, "status") },
       {
         header: "Recommendation",
-        className: "max-w-[250px]",
-        render: (r) => <span className="text-xs">{r.recommendation}</span>,
+        render: (r) => <span className="text-xs whitespace-normal">{r.recommendation}</span>,
       },
       {
         header: "Connections (30d)",
@@ -155,6 +154,7 @@ function getServiceColumns(service: string): ColumnDef[] {
   return [
     {
       header: "Resource",
+      className: "w-[220px]",
       render: (r) => (
         <div className="flex flex-col">
           <code className="text-xs font-mono">{r.resourceId}</code>
@@ -162,18 +162,17 @@ function getServiceColumns(service: string): ColumnDef[] {
         </div>
       ),
     },
-    { header: "Priority", render: (r) => <PriorityBadge priority={r.priority} /> },
+    { header: "Priority", className: "w-[90px]", render: (r) => <PriorityBadge priority={r.priority} /> },
     {
       header: "Recommendation",
-      className: "max-w-[300px]",
-      render: (r) => <span className="text-xs">{r.recommendation}</span>,
+      render: (r) => <span className="text-xs whitespace-normal">{r.recommendation}</span>,
     },
     {
       header: "Monthly Savings",
-      className: "text-right",
+      className: "w-[130px] text-right",
       render: (r) => <span className="font-medium">{formatCurrency(r.estimatedSavings)}</span>,
     },
-    { header: "Effort", render: (r) => <EffortBadge effort={r.effort} /> },
+    { header: "Effort", className: "w-[80px]", render: (r) => <EffortBadge effort={r.effort} /> },
   ];
 }
 
@@ -197,6 +196,7 @@ function ServiceRecommendationsTable({
   }
 
   return (
+    <div className="min-w-0 w-full overflow-x-auto rounded-md border">
     <Table>
       <TableHeader>
         <TableRow>
@@ -222,6 +222,7 @@ function ServiceRecommendationsTable({
         ))}
       </TableBody>
     </Table>
+    </div>
   );
 }
 
@@ -248,33 +249,35 @@ export function ServiceDeepDive({
   const showCommitment = COMMITMENT_SERVICES.has(service.toUpperCase());
 
   return (
-    <div className="flex gap-4 h-full">
+    <div className="grid h-full grid-cols-[1fr_380px] gap-0">
       {/* Main content — left column */}
-      <div className="flex-1 min-w-0 flex flex-col gap-4 overflow-y-auto">
-        {/* Service header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h2 className="text-base font-medium">{service}</h2>
-            <span className="text-xs text-muted-foreground">
-              {recommendations.length} recommendation{recommendations.length !== 1 ? "s" : ""}
+      <div className="min-w-0 overflow-hidden">
+        <div className="flex h-full flex-col gap-4 overflow-y-auto pr-4">
+          {/* Service header */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-medium">{service}</h2>
+              <span className="text-xs text-muted-foreground">
+                {recommendations.length} recommendation{recommendations.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+            <span className="text-sm font-medium">
+              {formatCurrency(totalSavings)} potential savings
             </span>
           </div>
-          <span className="text-sm font-medium">
-            {formatCurrency(totalSavings)} potential savings
-          </span>
+
+          {/* Service-specific recommendations table */}
+          <ServiceRecommendationsTable service={service} recommendations={recommendations} />
+
+          {/* Commitment comparison for EC2 / RDS */}
+          {showCommitment && (
+            <CommitmentComparison service={service} recommendations={recommendations} />
+          )}
         </div>
-
-        {/* Service-specific recommendations table */}
-        <ServiceRecommendationsTable service={service} recommendations={recommendations} />
-
-        {/* Commitment comparison for EC2 / RDS */}
-        {showCommitment && (
-          <CommitmentComparison service={service} recommendations={recommendations} />
-        )}
       </div>
 
       {/* Chat panel — right column */}
-      <div className="w-[380px] shrink-0 border-l pl-4 flex flex-col">
+      <div className="flex min-h-0 flex-col border-l pl-4">
         <CfmChatPanel
           accountName={accountName}
           awsAccountId={awsAccountId}

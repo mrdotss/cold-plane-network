@@ -92,7 +92,7 @@ export default async function ServiceDeepDivePage({ params }: ServiceDeepDivePag
           </Breadcrumb>
         </div>
       </header>
-      <div className="flex-1 p-4 min-w-[1280px]">
+      <div className="h-[calc(100svh-4rem)] overflow-hidden p-4">
         <ServiceDeepDive
           accountId={accountId}
           accountName={account.accountName}
