@@ -1,6 +1,6 @@
 import type { ArtifactManifest, ArtifactFile } from "@/lib/contracts/artifact-manifest";
 import type { ParsedSpec } from "../schema";
-import { generateTerraform } from "./terraform";
+import { generateTerraformModular } from "./terraform/index";
 
 /**
  * Compute byte size of a UTF-8 string.
@@ -19,7 +19,8 @@ function byteSize(content: string): number {
  */
 function generateReadme(
   resources: ParsedSpec["resources"],
-  warnings: string[]
+  warnings: string[],
+  terraformFiles: { path: string }[]
 ): string {
   const lines: string[] = [];
   lines.push("# Cold Network Plane — Generated Artifacts");
@@ -47,8 +48,26 @@ function generateReadme(
   lines.push("");
   lines.push("- `manifest.json` — Artifact manifest");
   lines.push("- `artifacts.json` — Machine-readable structured output");
-  lines.push("- `main.tf` — Terraform configuration");
   lines.push("- `README.md` — This file");
+  lines.push("");
+
+  if (terraformFiles.length > 0) {
+    lines.push("### Terraform Modules");
+    lines.push("");
+    for (const tf of terraformFiles) {
+      lines.push(`- \`${tf.path}\``);
+    }
+    lines.push("");
+  }
+
+  lines.push("## Usage");
+  lines.push("");
+  lines.push("```bash");
+  lines.push("cd terraform");
+  lines.push("terraform init");
+  lines.push("terraform plan");
+  lines.push("terraform apply");
+  lines.push("```");
   lines.push("");
 
   return lines.join("\n");
@@ -56,14 +75,15 @@ function generateReadme(
 
 /**
  * Orchestrate artifact generation from a parsed spec.
- * Produces an ArtifactManifest with at minimum: manifest.json, artifacts.json, README.md.
+ * Produces an ArtifactManifest with: manifest.json, artifacts.json, README.md,
+ * and a modular Terraform file structure (provider.tf, main.tf, modules/...).
  */
 export function generateArtifacts(parsed: ParsedSpec): ArtifactManifest {
   const startTime = performance.now();
   const allWarnings: string[] = [];
 
-  // Generate Terraform
-  const terraform = generateTerraform(parsed.resources);
+  // Generate modular Terraform
+  const terraform = generateTerraformModular(parsed.resources);
   allWarnings.push(...terraform.warnings);
 
   // Build artifacts.json — structured output of all resources
@@ -84,7 +104,7 @@ export function generateArtifacts(parsed: ParsedSpec): ArtifactManifest {
   );
 
   // Build README
-  const readme = generateReadme(parsed.resources, allWarnings);
+  const readme = generateReadme(parsed.resources, allWarnings, terraform.files);
 
   // Collect files (manifest.json will be added after we know the full list)
   const files: ArtifactFile[] = [];
@@ -105,15 +125,14 @@ export function generateArtifacts(parsed: ParsedSpec): ArtifactManifest {
   };
   files.push(readmeFile);
 
-  // Add main.tf if there are resources
-  if (parsed.resources.length > 0) {
-    const mainTfFile: ArtifactFile = {
-      path: "main.tf",
+  // Add all Terraform files
+  for (const tf of terraform.files) {
+    files.push({
+      path: tf.path,
       type: "text/plain",
-      content: terraform.mainTf,
-      sizeBytes: byteSize(terraform.mainTf),
-    };
-    files.push(mainTfFile);
+      content: tf.content,
+      sizeBytes: byteSize(tf.content),
+    });
   }
 
   const durationMs = Math.round(performance.now() - startTime);

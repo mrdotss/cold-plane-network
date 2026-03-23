@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RESOURCE_TYPES } from "@/lib/spec/schema";
+import { getGroupedResourceTypes } from "@/lib/spec/aws-categories";
 import { parseSpec } from "@/lib/spec/parser";
 import yaml from "js-yaml";
 
@@ -23,7 +24,7 @@ interface FormResource {
 
 const EMPTY_RESOURCE: FormResource = {
   name: "",
-  type: "vpc",
+  type: "ec2",
   properties: "",
   dependsOn: "",
   connectTo: "",
@@ -163,8 +164,12 @@ export function SpecForm({ specText, onSpecChange }: SpecFormProps) {
               className="h-7 w-full rounded border bg-background px-2 text-xs"
               aria-label="Resource type"
             >
-              {RESOURCE_TYPES.map((t) => (
-                <option key={t} value={t}>{t}</option>
+              {Object.entries(getGroupedResourceTypes()).map(([key, { label, types }]) => (
+                <optgroup key={key} label={label}>
+                  {types.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           </div>

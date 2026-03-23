@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useCallback } from "react";
-import { HugeiconsIcon } from "@hugeicons/react";
 import { getResourceStyle } from "@/lib/topology/node-types";
 import type { GraphIR } from "@/lib/contracts/graph-ir";
 import { cn } from "@/lib/utils";
@@ -81,9 +80,7 @@ export function ResourceList({
                 )}
               >
                 <td className="px-2 py-1">
-                  <div className={style.color}>
-                    <HugeiconsIcon icon={style.icon} size={14} />
-                  </div>
+                  <style.Icon size={16} />
                 </td>
                 <td className="px-2 py-1 font-medium">{row.label}</td>
                 <td className="px-2 py-1 text-muted-foreground">{row.type}</td>

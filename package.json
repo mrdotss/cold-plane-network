@@ -19,6 +19,7 @@
     "@react-pdf/renderer": "^4.3.2",
     "@tanstack/react-table": "^8.21.3",
     "@xyflow/react": "^12.10.0",
+    "aws-react-icons": "^3.3.0",
     "bcrypt": "^6.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

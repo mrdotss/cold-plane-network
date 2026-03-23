@@ -29,21 +29,53 @@
 
 /** Valid resource types recognized by the spec engine. */
 export const RESOURCE_TYPES = [
+  // Networking & Content Delivery
   "vpc",
   "subnet",
+  "routetable",
+  "securitygroup",
+  "nat",
+  "gateway",
+  "vpn",
+  "peering",
+  "endpoint",
+  "transitgateway",
+  "cloudfront",
+  "apigateway",
+  "route53",
+  // Compute
+  "ec2",
+  "lambda",
+  "ecs",
+  "fargate",
+  "autoscaling",
+  // Database
+  "rds",
+  "dynamodb",
+  "elasticache",
+  "aurora",
+  // Storage
+  "s3",
+  "efs",
+  "ebs",
+  // Load Balancing
+  "alb",
+  "nlb",
+  "loadbalancer",
+  // Application Integration
+  "sqs",
+  "sns",
+  "eventbridge",
+  // Security & Identity
+  "iam-role",
+  "waf",
+  "kms",
+  // General / Legacy
+  "server",
   "router",
   "firewall",
   "switch",
-  "server",
-  "loadbalancer",
-  "gateway",
   "dns",
-  "vpn",
-  "nat",
-  "peering",
-  "endpoint",
-  "securitygroup",
-  "routetable",
 ] as const;
 
 export type ResourceType = (typeof RESOURCE_TYPES)[number];

@@ -2,52 +2,110 @@
 
 import { memo } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { HugeiconsIcon } from "@hugeicons/react";
+import type { AwsIconProps } from "./aws-icons";
 import {
-  CloudIcon,
-  GridIcon,
+  VpcIcon,
+  SubnetIcon,
+  RouteTableIcon,
+  SecurityGroupIcon,
+  NatGatewayIcon,
+  InternetGatewayIcon,
+  VpnIcon,
+  PeeringIcon,
+  EndpointIcon,
+  TransitGatewayIcon,
+  CloudFrontIcon,
+  ApiGatewayIcon,
+  Route53Icon,
+  Ec2Icon,
+  LambdaIcon,
+  EcsIcon,
+  FargateIcon,
+  AutoScalingIcon,
+  RdsIcon,
+  DynamoDbIcon,
+  ElastiCacheIcon,
+  AuroraIcon,
+  S3Icon,
+  EfsIcon,
+  EbsIcon,
+  AlbIcon,
+  NlbIcon,
+  LoadbalancerIcon,
+  SqsIcon,
+  SnsIcon,
+  EventBridgeIcon,
+  IamRoleIcon,
+  WafIcon,
+  KmsIcon,
+  GenericAwsIcon,
+  ServerIcon,
   RouterIcon,
   FirewallIcon,
-  HierarchyIcon,
-  CloudServerIcon,
-  BalanceScaleIcon,
-  ApiGatewayIcon,
-  GlobeIcon,
-  SecurityWifiIcon,
-  ConnectIcon,
-  FlowConnectionIcon,
-  Route01Icon,
-  ShieldIcon,
-  DatabaseIcon,
-} from "@hugeicons/core-free-icons";
-import type { IconSvgElement } from "@hugeicons/react";
+  SwitchIcon,
+  DnsIcon,
+} from "./aws-icons";
 
-/** Map resource types to hugeicons and colors. */
+/**
+ * Map resource types to official AWS icons.
+ * Icons have their own branded colors baked in (orange for EC2, green for S3, etc.)
+ * so we use a clean neutral background for the node card.
+ */
 const RESOURCE_STYLE_MAP: Record<
   string,
-  { icon: IconSvgElement; color: string; bg: string }
+  { Icon: React.ComponentType<AwsIconProps> }
 > = {
-  vpc: { icon: CloudIcon, color: "text-blue-500", bg: "bg-blue-50 dark:bg-blue-950" },
-  subnet: { icon: GridIcon, color: "text-cyan-500", bg: "bg-cyan-50 dark:bg-cyan-950" },
-  router: { icon: RouterIcon, color: "text-orange-500", bg: "bg-orange-50 dark:bg-orange-950" },
-  firewall: { icon: FirewallIcon, color: "text-red-500", bg: "bg-red-50 dark:bg-red-950" },
-  switch: { icon: HierarchyIcon, color: "text-purple-500", bg: "bg-purple-50 dark:bg-purple-950" },
-  server: { icon: CloudServerIcon, color: "text-green-500", bg: "bg-green-50 dark:bg-green-950" },
-  loadbalancer: { icon: BalanceScaleIcon, color: "text-yellow-500", bg: "bg-yellow-50 dark:bg-yellow-950" },
-  gateway: { icon: ApiGatewayIcon, color: "text-indigo-500", bg: "bg-indigo-50 dark:bg-indigo-950" },
-  dns: { icon: GlobeIcon, color: "text-teal-500", bg: "bg-teal-50 dark:bg-teal-950" },
-  vpn: { icon: SecurityWifiIcon, color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-950" },
-  nat: { icon: ConnectIcon, color: "text-amber-500", bg: "bg-amber-50 dark:bg-amber-950" },
-  peering: { icon: FlowConnectionIcon, color: "text-pink-500", bg: "bg-pink-50 dark:bg-pink-950" },
-  endpoint: { icon: DatabaseIcon, color: "text-violet-500", bg: "bg-violet-50 dark:bg-violet-950" },
-  securitygroup: { icon: ShieldIcon, color: "text-rose-500", bg: "bg-rose-50 dark:bg-rose-950" },
-  routetable: { icon: Route01Icon, color: "text-sky-500", bg: "bg-sky-50 dark:bg-sky-950" },
+  // Networking
+  vpc: { Icon: VpcIcon },
+  subnet: { Icon: SubnetIcon },
+  routetable: { Icon: RouteTableIcon },
+  securitygroup: { Icon: SecurityGroupIcon },
+  nat: { Icon: NatGatewayIcon },
+  gateway: { Icon: InternetGatewayIcon },
+  vpn: { Icon: VpnIcon },
+  peering: { Icon: PeeringIcon },
+  endpoint: { Icon: EndpointIcon },
+  transitgateway: { Icon: TransitGatewayIcon },
+  cloudfront: { Icon: CloudFrontIcon },
+  apigateway: { Icon: ApiGatewayIcon },
+  route53: { Icon: Route53Icon },
+  // Load Balancing
+  alb: { Icon: AlbIcon },
+  nlb: { Icon: NlbIcon },
+  loadbalancer: { Icon: LoadbalancerIcon },
+  // Compute
+  ec2: { Icon: Ec2Icon },
+  lambda: { Icon: LambdaIcon },
+  ecs: { Icon: EcsIcon },
+  fargate: { Icon: FargateIcon },
+  autoscaling: { Icon: AutoScalingIcon },
+  // Database
+  rds: { Icon: RdsIcon },
+  dynamodb: { Icon: DynamoDbIcon },
+  elasticache: { Icon: ElastiCacheIcon },
+  aurora: { Icon: AuroraIcon },
+  // Storage
+  s3: { Icon: S3Icon },
+  efs: { Icon: EfsIcon },
+  ebs: { Icon: EbsIcon },
+  // Integration
+  sqs: { Icon: SqsIcon },
+  sns: { Icon: SnsIcon },
+  eventbridge: { Icon: EventBridgeIcon },
+  // Security
+  "iam-role": { Icon: IamRoleIcon },
+  waf: { Icon: WafIcon },
+  kms: { Icon: KmsIcon },
+  // General / Legacy
+  server: { Icon: ServerIcon },
+  router: { Icon: RouterIcon },
+  firewall: { Icon: FirewallIcon },
+  switch: { Icon: SwitchIcon },
+  dns: { Icon: DnsIcon },
 };
 
 const DEFAULT_STYLE = {
-  icon: HierarchyIcon,
-  color: "text-neutral-500",
-  bg: "bg-neutral-50 dark:bg-neutral-950",
+  Icon: GenericAwsIcon,
 };
 
 /** Get visual style for a resource type. */
@@ -73,15 +131,15 @@ const TopologyNode = memo(function TopologyNode({
   return (
     <div
       className={`
-        flex items-center gap-2 rounded-md border px-3 py-2
-        ${style.bg}
-        ${selected ? "ring-2 ring-blue-400 border-blue-400" : "border-neutral-200 dark:border-neutral-800"}
+        flex items-center gap-2 rounded-lg border px-3 py-2
+        bg-background
+        ${selected ? "ring-2 ring-blue-400 border-blue-400" : "border-neutral-200 dark:border-neutral-700"}
         shadow-sm transition-shadow hover:shadow-md
       `}
     >
       <Handle type="target" position={Position.Top} className="!w-2 !h-2 !bg-neutral-400" />
-      <div className={`flex-shrink-0 ${style.color}`}>
-        <HugeiconsIcon icon={style.icon} size={18} />
+      <div className="flex-shrink-0">
+        <style.Icon size={24} />
       </div>
       <div className="flex flex-col min-w-0">
         <span className="text-xs font-medium truncate text-neutral-900 dark:text-neutral-100">
