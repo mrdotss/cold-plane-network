@@ -3,6 +3,15 @@ import { Button } from "@/components/ui/button";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { LayoutBottomIcon } from "@hugeicons/core-free-icons";
 
+const navLinks = [
+  { href: "#features", label: "Features" },
+  { href: "#how-it-works", label: "How It Works" },
+  { href: "#demo", label: "Demo" },
+  { href: "#migration", label: "Migration" },
+  { href: "#sizing", label: "Sizing" },
+  { href: "#cfm", label: "CFM" },
+];
+
 export function Navbar() {
   return (
     <nav className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -15,25 +24,19 @@ export function Navbar() {
         </Link>
 
         <div className="hidden items-center gap-6 md:flex">
-          <a href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-            Features
-          </a>
-          <a href="#how-it-works" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-            How It Works
-          </a>
-          <a href="#demo" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-            Demo
-          </a>
-          <a href="#migration" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-            Migration
-          </a>
-          <a href="#sizing" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-            Sizing
-          </a>
+          {navLinks.map((link) => (
+            <a
+              key={link.href}
+              href={link.href}
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {link.label}
+            </a>
+          ))}
         </div>
 
         <Button asChild size="sm">
-          <Link href="/dashboard/studio">Open Studio</Link>
+          <Link href="/dashboard">Get Started</Link>
         </Button>
       </div>
     </nav>

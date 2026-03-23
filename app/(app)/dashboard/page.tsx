@@ -2,8 +2,15 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { validateSession } from "@/lib/auth/session";
 import { db } from "@/lib/db/client";
-import { projects, sizingReports, auditEvents } from "@/lib/db/schema";
-import { eq, desc, count } from "drizzle-orm";
+import {
+  projects,
+  sizingReports,
+  auditEvents,
+  cfmAccounts,
+  cfmScans,
+  cfmRecommendations,
+} from "@/lib/db/schema";
+import { eq, desc, count, sum, and } from "drizzle-orm";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -21,12 +28,19 @@ async function getDashboardData(userId: string) {
     [{ projectCount }],
     [{ sizingReportCount }],
     [{ auditEventCount }],
+    [{ cfmAccountCount }],
+    [{ cfmScanCount }],
     recentSizingReports,
     recentAuditEvents,
+    cfmSavingsResult,
   ] = await Promise.all([
     db.select({ projectCount: count() }).from(projects).where(eq(projects.createdById, userId)),
     db.select({ sizingReportCount: count() }).from(sizingReports).where(eq(sizingReports.userId, userId)),
     db.select({ auditEventCount: count() }).from(auditEvents).where(eq(auditEvents.userId, userId)),
+    db.select({ cfmAccountCount: count() }).from(cfmAccounts).where(eq(cfmAccounts.userId, userId)),
+    db.select({ cfmScanCount: count() }).from(cfmScans).where(
+      and(eq(cfmScans.userId, userId), eq(cfmScans.status, "completed"))
+    ),
     db
       .select()
       .from(sizingReports)
@@ -39,6 +53,11 @@ async function getDashboardData(userId: string) {
       .where(eq(auditEvents.userId, userId))
       .orderBy(desc(auditEvents.createdAt))
       .limit(8),
+    db
+      .select({ totalSavings: sum(cfmRecommendations.estimatedSavings) })
+      .from(cfmRecommendations)
+      .innerJoin(cfmScans, eq(cfmRecommendations.scanId, cfmScans.id))
+      .where(eq(cfmScans.userId, userId)),
   ]);
 
   const latestReport = recentSizingReports[0];
@@ -49,6 +68,9 @@ async function getDashboardData(userId: string) {
       sizingReports: sizingReportCount,
       auditEvents: auditEventCount,
       totalMonthlyEstimate: latestReport?.totalMonthly ?? 0,
+      cfmAccounts: cfmAccountCount,
+      cfmScans: cfmScanCount,
+      cfmTotalSavings: Number(cfmSavingsResult[0]?.totalSavings ?? 0),
     },
     recentSizingReports: recentSizingReports.map((r) => ({
       id: r.id,

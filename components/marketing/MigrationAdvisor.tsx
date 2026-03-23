@@ -45,15 +45,21 @@ const highlights = [
   "Confidence ratings (High, Medium, Low)",
   "Table and canvas visualization",
   "Markdown and CSV export",
+  "No AI hallucinations — pure catalog-driven",
 ];
 
 export function MigrationAdvisor() {
   return (
     <section id="migration" className="py-16">
       <div className="mx-auto max-w-6xl px-4">
-        <h2 className="mb-2 text-center text-2xl font-semibold tracking-tight">
-          Migration Advisor
-        </h2>
+        <div className="mb-2 flex items-center justify-center gap-2">
+          <div className="flex size-8 items-center justify-center rounded-lg bg-muted">
+            <HugeiconsIcon icon={ArrowDataTransferHorizontalIcon} strokeWidth={2} className="size-4 text-foreground" />
+          </div>
+          <h2 className="text-2xl font-semibold tracking-tight">
+            Migration Advisor
+          </h2>
+        </div>
         <p className="mb-10 text-center text-sm text-muted-foreground max-w-lg mx-auto">
           Turn Azure resource inventories into actionable AWS migration plans — no guesswork, no AI hallucinations. Pure catalog-driven recommendations.
         </p>

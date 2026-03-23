@@ -4,19 +4,20 @@ import { Hero } from "@/components/marketing/Hero";
 import { Features } from "@/components/marketing/Features";
 import { MigrationAdvisor } from "@/components/marketing/MigrationAdvisor";
 import { Sizing } from "@/components/marketing/Sizing";
+import { CfmAnalysis } from "@/components/marketing/CfmAnalysis";
 import { HowItWorks } from "@/components/marketing/HowItWorks";
 import { DemoPreview } from "@/components/marketing/DemoPreview";
 import { CTABanner } from "@/components/marketing/CTABanner";
 import { Footer } from "@/components/marketing/Footer";
 
 export const metadata: Metadata = {
-  title: "Cold Network Plane — Spec-First Network Topology Studio",
+  title: "Cold Network Plane — Cloud Infrastructure Design & Optimization Platform",
   description:
-    "Design hybrid cloud and network topologies with a live preview. Generate Terraform and config artifacts instantly.",
+    "Design hybrid cloud topologies, plan Azure-to-AWS migrations, right-size workloads with AI, and optimize cloud costs — all from a single platform.",
   openGraph: {
-    title: "Cold Network Plane — Spec-First Network Topology Studio",
+    title: "Cold Network Plane — Cloud Infrastructure Design & Optimization Platform",
     description:
-      "Design hybrid cloud and network topologies with a live preview. Generate Terraform and config artifacts instantly.",
+      "Design hybrid cloud topologies, plan Azure-to-AWS migrations, right-size workloads with AI, and optimize cloud costs — all from a single platform.",
     type: "website",
   },
 };
@@ -27,10 +28,11 @@ export default function MarketingPage() {
       <Navbar />
       <Hero />
       <Features />
-      <MigrationAdvisor />
-      <Sizing />
       <HowItWorks />
       <DemoPreview />
+      <MigrationAdvisor />
+      <Sizing />
+      <CfmAnalysis />
       <CTABanner />
       <Footer />
     </div>
