@@ -43,6 +43,7 @@ next-env.d.ts
 # IDE
 .vscode/
 .idea/
+.kiro/
 *.swp
 *.swo
 *~
@@ -56,5 +57,4 @@ logs/
 # Misc
 .cache/
 .turbo/
-.kiro/
 .claude/
