@@ -10,11 +10,11 @@ export interface PositionedNode extends GraphNode {
 /** Layout direction: top-bottom or left-right. */
 export type LayoutDirection = "TB" | "LR";
 
-/** Default node dimensions. */
-const DEFAULT_NODE_WIDTH = 172;
-const DEFAULT_NODE_HEIGHT = 36;
-const NODE_SEP = 50;
-const RANK_SEP = 50;
+/** Default node dimensions (must approximate actual rendered size). */
+const DEFAULT_NODE_WIDTH = 180;
+const DEFAULT_NODE_HEIGHT = 48;
+const NODE_SEP = 40;
+const RANK_SEP = 60;
 const MARGIN = 20;
 
 /**

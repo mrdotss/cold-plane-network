@@ -144,6 +144,25 @@ export function StudioClient() {
     [pipeline]
   );
 
+  // Count and filter inferred edges (must be before early return to preserve hook order)
+  const inferredEdgeCount = useMemo(
+    () =>
+      pipeline.flowEdges.filter(
+        (e) => (e.data as { relationType?: string })?.relationType === "inferred"
+      ).length,
+    [pipeline.flowEdges]
+  );
+
+  const visibleEdges = useMemo(
+    () =>
+      pipeline.showInferredEdges
+        ? pipeline.flowEdges
+        : pipeline.flowEdges.filter(
+            (e) => (e.data as { relationType?: string })?.relationType !== "inferred"
+          ),
+    [pipeline.flowEdges, pipeline.showInferredEdges]
+  );
+
   if (!hydrated) {
     return (
       <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
@@ -151,13 +170,6 @@ export function StudioClient() {
       </div>
     );
   }
-
-  // Filter out inferred edges when toggle is off
-  const visibleEdges = pipeline.showInferredEdges
-    ? pipeline.flowEdges
-    : pipeline.flowEdges.filter(
-        (e) => (e.data as { relationType?: string })?.relationType !== "inferred"
-      );
 
   return (
     <StudioLayout
@@ -168,6 +180,7 @@ export function StudioClient() {
           hasArtifacts={pipeline.artifacts !== null}
           loadingAction={loadingAction}
           showInferredEdges={pipeline.showInferredEdges}
+          inferredEdgeCount={inferredEdgeCount}
           onToggleInferredEdges={() => pipeline.setShowInferredEdges(!pipeline.showInferredEdges)}
           onValidate={handleValidate}
           onGenerate={handleGenerate}

@@ -23,6 +23,7 @@ interface PreviewToolbarProps {
   hasArtifacts: boolean;
   loadingAction: "validate" | "generate" | "share" | "download" | null;
   showInferredEdges: boolean;
+  inferredEdgeCount: number;
   onToggleInferredEdges: () => void;
   onValidate: () => void;
   onGenerate: () => void;
@@ -84,6 +85,7 @@ export function PreviewToolbar({
   hasArtifacts,
   loadingAction,
   showInferredEdges,
+  inferredEdgeCount,
   onToggleInferredEdges,
   onValidate,
   onGenerate,
@@ -149,6 +151,7 @@ export function PreviewToolbar({
               size="sm"
               onClick={onToggleInferredEdges}
               aria-label={showInferredEdges ? "Hide inferred edges" : "Show inferred edges"}
+              className="gap-1.5"
             >
               <HugeiconsIcon
                 icon={showInferredEdges ? LinkCircleIcon : UnlinkIcon}
@@ -156,10 +159,17 @@ export function PreviewToolbar({
                 data-icon="inline-start"
               />
               Inferred
+              {inferredEdgeCount > 0 && (
+                <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+                  {inferredEdgeCount}
+                </span>
+              )}
             </Button>
           </TooltipTrigger>
           <TooltipContent>
-            {showInferredEdges ? "Hide inferred connections" : "Show inferred connections"}
+            {showInferredEdges
+              ? `Hide ${inferredEdgeCount} inferred connection${inferredEdgeCount !== 1 ? "s" : ""}`
+              : `Show ${inferredEdgeCount} inferred connection${inferredEdgeCount !== 1 ? "s" : ""}`}
           </TooltipContent>
         </Tooltip>
       </div>

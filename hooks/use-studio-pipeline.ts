@@ -109,20 +109,18 @@ export function useStudioPipeline(initialSpec: string = ""): StudioState {
         positionedNodes = buildResult.graphIR.nodes.map((n) => ({
           ...n,
           position: prevPositionsRef.current.get(n.id) ?? { x: 0, y: 0 },
-          width: 172,
-          height: 36,
+          width: 180,
+          height: 48,
         }));
       }
 
       // 6. Convert to React Flow nodes/edges
+      // Note: Do NOT set `measured` — let React Flow measure actual DOM dimensions
+      // so handle positions are accurate for edge path calculation.
       const newFlowNodes: Node[] = positionedNodes.map((n) => ({
         id: n.id,
         type: "topology",
         position: n.position,
-        // Provide dimensions so React Flow can compute edge paths
-        width: n.width,
-        height: n.height,
-        measured: { width: n.width, height: n.height },
         data: {
           label: n.label,
           resourceType: n.type,
@@ -134,16 +132,9 @@ export function useStudioPipeline(initialSpec: string = ""): StudioState {
         id: e.id,
         source: e.source,
         target: e.target,
-        // Use default edge type for now - custom types can be added later
-        // type: e.relationType,
+        type: e.relationType,
         data: { meta: e.meta, relationType: e.relationType },
         animated: e.relationType === "inferred",
-        style: {
-          stroke: e.relationType === "inferred" ? "#999" : "#333",
-          strokeWidth: e.relationType === "inferred" ? 1 : 1.5,
-          strokeDasharray: e.relationType === "containment" ? "5 5" : 
-                           e.relationType === "inferred" ? "2 4" : undefined,
-        },
       }));
 
       setFlowNodes(newFlowNodes);
