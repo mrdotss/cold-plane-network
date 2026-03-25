@@ -98,6 +98,7 @@ MUST use Next.js Route Groups to separate public marketing pages from authentica
 | `app/api/chat/list/route.ts` | GET | List user's chat conversations |
 | `app/api/files/upload/route.ts` | POST | Upload file attachment |
 | `app/api/projects/route.ts` | GET, POST | Migration projects |
+| `app/api/projects/[projectId]/relationships/route.ts` | GET, POST | Azure resource relationships |
 
 ## Module Structure
 
@@ -180,6 +181,17 @@ components/chat/
   ChatSidebar.tsx          # Chat history list (past conversations)
   FileAttachment.tsx       # File attachment preview chip
   MarkdownRenderer.tsx     # Render AI markdown responses
+```
+
+### `lib/migration/`
+
+```
+lib/migration/
+  relationship-engine.ts    # Pure logic: extract Azure resource relationships (name heuristic, ARM ID, properties, RG)
+  aws-topology-builder.ts   # Pure logic: generate mirrored AWS topology from Azure relationships + mappings
+  aws-service-icons.tsx     # AWS service name → official AWS icon component mapping
+  azure-icons.tsx           # Azure resource type → category-colored hugeicons icon mapping
+  __tests__/                # Property-based + unit tests for relationship engine and topology builder
 ```
 
 ### `components/studio/`

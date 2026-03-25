@@ -27,7 +27,7 @@ const azureResourceGraphItem = z.object({
   resourceGroup: z.string().optional().nullable(),
   tags: z.record(z.string(), z.string()).optional().nullable(),
   id: z.string().optional(),
-  properties: z.record(z.string(), z.unknown()).optional(),
+  properties: z.record(z.string(), z.unknown()).optional().nullable(),
 }).loose();
 
 /** Accept bare array, {value: [...]}, or {data: [...]} wrappers */

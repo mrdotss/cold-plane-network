@@ -68,7 +68,7 @@ describe("getCatalogCategories", () => {
 describe("getCatalogStats", () => {
   it("returns version, totalMappings, categories, and uniqueAzureTypes", () => {
     const stats = getCatalogStats();
-    expect(stats.version).toBe("1.0.0");
+    expect(stats.version).toBe("2.0.0");
     expect(stats.totalMappings).toBeGreaterThan(0);
     expect(stats.categories.length).toBeGreaterThan(0);
     expect(stats.uniqueAzureTypes).toBeGreaterThan(0);

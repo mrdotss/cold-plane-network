@@ -14,11 +14,26 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+
+interface RelStats {
+  total: number
+  byType: Record<string, number>
+  byMethod: Record<string, number>
+  byConfidence: Record<string, number>
+}
+
+const METHOD_LABELS: Record<string, string> = {
+  arm_hierarchy: "ARM hierarchy",
+  property_ref: "Property refs",
+  name_heuristic: "Name heuristics",
+  rg_heuristic: "RG co-location",
+}
 
 export default function ImportPage() {
   const params = useParams<{ projectId: string }>()
@@ -31,10 +46,27 @@ export default function ImportPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [relStats, setRelStats] = useState<RelStats | null>(null)
+
+  async function extractRelationships(projectId: string): Promise<RelStats | null> {
+    try {
+      const res = await fetch(`/api/projects/${projectId}/relationships`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      })
+      if (!res.ok) return null
+      const json = await res.json()
+      const stats = json.stats as RelStats | undefined
+      return stats ?? null
+    } catch {
+      return null
+    }
+  }
 
   async function importJson(data: unknown) {
     setError(null)
     setSuccess(null)
+    setRelStats(null)
     setSubmitting(true)
     try {
       const res = await fetch(`/api/projects/${params.projectId}/resources`, {
@@ -50,7 +82,14 @@ export default function ImportPage() {
         setError(msg ?? "Import failed")
         return
       }
-      setSuccess(`Imported ${json.data.count} resources`)
+      const count = json.data.count
+      const relResult = await extractRelationships(params.projectId)
+      setRelStats(relResult)
+      if (relResult) {
+        setSuccess(`Imported ${count} resources, found ${relResult.total} relationships`)
+      } else {
+        setSuccess(`Imported ${count} resources (relationship extraction failed)`)
+      }
       setJsonText("")
     } catch {
       setError("Import failed")
@@ -90,6 +129,7 @@ export default function ImportPage() {
     e.preventDefault()
     setError(null)
     setSuccess(null)
+    setRelStats(null)
     setSubmitting(true)
     try {
       const res = await fetch(`/api/projects/${params.projectId}/resources`, {
@@ -112,7 +152,13 @@ export default function ImportPage() {
         setError(msg ?? "Import failed")
         return
       }
-      setSuccess("Resource added")
+      const relResult = await extractRelationships(params.projectId)
+      setRelStats(relResult)
+      if (relResult) {
+        setSuccess(`Resource added, found ${relResult.total} relationships`)
+      } else {
+        setSuccess("Resource added (relationship extraction failed)")
+      }
       setManualName("")
       setManualType("")
       setManualKind("")
@@ -160,7 +206,29 @@ export default function ImportPage() {
         )}
         {success && (
           <div className="rounded-lg border border-green-500/50 bg-green-500/10 p-3 text-sm text-green-700 dark:text-green-400">
-            {success}
+            <p>{success}</p>
+            {relStats && relStats.total > 0 && (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                {Object.entries(relStats.byType).map(([type, count]) => (
+                  <Badge key={type} variant="outline" className="text-[10px]">
+                    {type}: {count}
+                  </Badge>
+                ))}
+                <span className="text-muted-foreground">·</span>
+                {Object.entries(relStats.byMethod).map(([method, count]) => (
+                  <Badge key={method} variant="secondary" className="text-[10px]">
+                    {METHOD_LABELS[method] ?? method}: {count}
+                  </Badge>
+                ))}
+              </div>
+            )}
+            <div className="mt-2">
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/dashboard/migration/${params.projectId}/mapping/canvas`}>
+                  View Topology Canvas
+                </Link>
+              </Button>
+            </div>
           </div>
         )}
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -12,9 +12,7 @@ import {
   type Node,
   type Edge,
   type NodeTypes,
-  type NodeProps,
-  Handle,
-  Position,
+  type EdgeTypes,
   useNodesState,
   useEdgesState,
   useReactFlow,
@@ -33,7 +31,6 @@ import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import {
   Sheet,
   SheetContent,
@@ -42,433 +39,360 @@ import {
 } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  buildCanvasGraph,
-  type AzureResourceWithRecommendation,
-  type CanvasNode,
-} from "@/lib/canvas-utils";
-import { AwsServiceIcon } from "@/lib/migration/aws-service-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
+  TooltipProvider,
+} from "@/components/ui/tooltip";
 import {
-  FilterIcon,
-  Search01Icon,
-  ArrowRight01Icon,
-  CheckmarkSquare02Icon,
-  SquareIcon,
-  Cancel01Icon,
-  ArrowShrinkIcon,
-} from "@hugeicons/core-free-icons";
+  buildDualTopologyGraph,
+  type DualTopologyNode,
+  type DualTopologyEdge,
+  type DualTopologyFilters,
+} from "@/lib/canvas-utils";
+import {
+  buildAWSTopology,
+  type MappingRecommendationInput,
+} from "@/lib/migration/aws-topology-builder";
+import type {
+  AzureResourceInput,
+  AzureResourceRelationship,
+  RelationType,
+  ConfidenceLevel,
+} from "@/lib/migration/relationship-engine";
+import { AzureResourceIcon } from "@/lib/migration/azure-icons";
+import { AwsServiceIcon } from "@/lib/migration/aws-service-icons";
+import { AzureResourceNode } from "@/components/migration/AzureResourceNode";
+import { AWSResourceNode } from "@/components/migration/AWSResourceNode";
+import { ResourceGroupNode } from "@/components/migration/ResourceGroupNode";
+import { NoMappingNode } from "@/components/migration/NoMappingNode";
+import { RGSummaryNode } from "@/components/migration/RGSummaryNode";
+import { RelationshipEdge } from "@/components/migration/RelationshipEdge";
+import { MappingEdge } from "@/components/migration/MappingEdge";
+import { AggregatedEdge } from "@/components/migration/AggregatedEdge";
+import {
+  TopologyToolbar,
+  ALL_RELATION_TYPES,
+  ALL_CONFIDENCE_LEVELS,
+  RELATION_TYPE_LABELS,
+  type ViewMode,
+} from "@/components/migration/TopologyToolbar";
 
-/* ──────────────────────────────────────────────────────────────── */
-/* Constants                                                        */
-/* ──────────────────────────────────────────────────────────────── */
+/* ── CSS for animated dashed edges ── */
+const DASH_ANIMATION_CSS = `
+@keyframes dashmove {
+  to { stroke-dashoffset: -12; }
+}
+`;
 
-const CONFIDENCE_COLORS: Record<string, { stroke: string; bg: string; text: string }> = {
-  High:   { stroke: "#22c55e", bg: "bg-green-100 dark:bg-green-950/40",  text: "text-green-700 dark:text-green-400" },
-  Medium: { stroke: "#eab308", bg: "bg-yellow-100 dark:bg-yellow-950/40", text: "text-yellow-700 dark:text-yellow-400" },
-  Low:    { stroke: "#f97316", bg: "bg-orange-100 dark:bg-orange-950/40", text: "text-orange-700 dark:text-orange-400" },
-  None:   { stroke: "#ef4444", bg: "bg-red-100 dark:bg-red-950/40",      text: "text-red-700 dark:text-red-400" },
+/* ── Constants ── */
+
+const AUTO_COLLAPSE_NODE_THRESHOLD = 200;
+
+const CONFIDENCE_BADGE_COLORS: Record<string, { bg: string; text: string }> = {
+  High:     { bg: "bg-green-100 dark:bg-green-950/40",  text: "text-green-700 dark:text-green-400" },
+  Medium:   { bg: "bg-yellow-100 dark:bg-yellow-950/40", text: "text-yellow-700 dark:text-yellow-400" },
+  Low:      { bg: "bg-orange-100 dark:bg-orange-950/40", text: "text-orange-700 dark:text-orange-400" },
+  Definite: { bg: "bg-blue-100 dark:bg-blue-950/40",    text: "text-blue-700 dark:text-blue-400" },
+  None:     { bg: "bg-red-100 dark:bg-red-950/40",      text: "text-red-700 dark:text-red-400" },
 };
 
-const CATEGORY_META: Record<string, { color: string; borderColor: string; dotColor: string }> = {
-  Compute:     { color: "text-orange-600 dark:text-orange-400", borderColor: "border-l-orange-500", dotColor: "#f97316" },
-  Networking:  { color: "text-purple-600 dark:text-purple-400", borderColor: "border-l-purple-500", dotColor: "#a855f7" },
-  Storage:     { color: "text-green-600 dark:text-green-400",   borderColor: "border-l-green-500",  dotColor: "#22c55e" },
-  Database:    { color: "text-blue-600 dark:text-blue-400",     borderColor: "border-l-blue-500",   dotColor: "#3b82f6" },
-  Security:    { color: "text-red-600 dark:text-red-400",       borderColor: "border-l-red-500",    dotColor: "#ef4444" },
-  Monitoring:  { color: "text-pink-600 dark:text-pink-400",     borderColor: "border-l-pink-500",   dotColor: "#ec4899" },
-  Integration: { color: "text-indigo-600 dark:text-indigo-400", borderColor: "border-l-indigo-500", dotColor: "#6366f1" },
-  Serverless:  { color: "text-amber-600 dark:text-amber-400",   borderColor: "border-l-amber-500",  dotColor: "#f59e0b" },
-  Containers:  { color: "text-sky-600 dark:text-sky-400",       borderColor: "border-l-sky-500",    dotColor: "#0ea5e9" },
-  "AI-ML":     { color: "text-cyan-600 dark:text-cyan-400",     borderColor: "border-l-cyan-500",   dotColor: "#06b6d4" },
-  Unknown:     { color: "text-gray-500 dark:text-gray-400",     borderColor: "border-l-gray-400",   dotColor: "#9ca3af" },
-};
-
-function getCategoryMeta(cat: string) {
-  return CATEGORY_META[cat] ?? CATEGORY_META.Unknown;
-}
-
-/** Shorten Azure type for display: "microsoft.compute/virtualmachines" → "compute/virtualmachines" */
-function shortAzureType(type: string): string {
-  return type.replace(/^microsoft\./i, "");
-}
-
-/* ──────────────────────────────────────────────────────────────── */
-/* Azure Node                                                       */
-/* ──────────────────────────────────────────────────────────────── */
-
-function AzureNode({ data, selected }: NodeProps<Node<CanvasNode["data"] & { azureType?: string; highlighted?: boolean }>>) {
-  const category = data.category ?? "Unknown";
-  const meta = getCategoryMeta(category);
-  const confidence = data.confidence ?? "None";
-  const confColor = CONFIDENCE_COLORS[confidence];
-  const highlighted = data.highlighted;
-
-  return (
-    <div
-      className={`
-        rounded-lg border-l-4 border bg-background shadow-sm
-        min-w-[200px] max-w-[240px] px-3 py-2 cursor-pointer
-        transition-all duration-200
-        ${meta.borderColor}
-        ${selected ? "ring-2 ring-primary shadow-md" : "border-border"}
-        ${highlighted ? "ring-2 ring-yellow-400 shadow-lg" : ""}
-        ${highlighted === false ? "opacity-30" : "hover:shadow-md"}
-      `}
-    >
-      <div className="flex items-center gap-2">
-        {/* Azure badge with category color */}
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800">
-          <span className="text-[9px] font-bold text-blue-600 dark:text-blue-400">Az</span>
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-xs font-semibold text-foreground">
-            {data.label}
-          </div>
-          {data.azureType && (
-            <div className="truncate text-[9px] font-mono text-muted-foreground">
-              {shortAzureType(data.azureType)}
-            </div>
-          )}
-        </div>
-        {/* Confidence dot */}
-        <span
-          className="h-2.5 w-2.5 shrink-0 rounded-full border border-background"
-          style={{ backgroundColor: confColor?.stroke ?? "#9ca3af" }}
-          title={`Confidence: ${confidence}`}
-        />
-      </div>
-      <Handle type="source" position={Position.Right} className="!w-2 !h-2 !border-background" style={{ background: meta.dotColor }} />
-    </div>
-  );
-}
-
-/* ──────────────────────────────────────────────────────────────── */
-/* AWS Node                                                         */
-/* ──────────────────────────────────────────────────────────────── */
-
-function AwsNode({ data, selected }: NodeProps<Node<CanvasNode["data"] & { highlighted?: boolean }>>) {
-  const category = data.category ?? "Unknown";
-  const meta = getCategoryMeta(category);
-  const highlighted = data.highlighted;
-
-  return (
-    <div
-      className={`
-        rounded-lg border-l-4 border bg-background shadow-sm
-        min-w-[200px] max-w-[260px] px-3 py-2 cursor-pointer
-        transition-all duration-200
-        ${meta.borderColor}
-        ${selected ? "ring-2 ring-primary shadow-md" : "border-border"}
-        ${highlighted ? "ring-2 ring-yellow-400 shadow-lg" : ""}
-        ${highlighted === false ? "opacity-30" : "hover:shadow-md"}
-      `}
-    >
-      <Handle type="target" position={Position.Left} className="!w-2 !h-2 !border-background" style={{ background: meta.dotColor }} />
-      <div className="flex items-center gap-2">
-        <div className="shrink-0">
-          <AwsServiceIcon service={data.label} size={28} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-xs font-semibold text-foreground">
-            {data.label}
-          </div>
-          <div className="flex items-center gap-1">
-            <span className={`truncate text-[10px] font-medium ${meta.color}`}>{category}</span>
-            {data.count && data.count > 1 && (
-              <Badge variant="secondary" className="text-[9px] px-1.5 h-4 font-bold ml-auto">
-                {data.count}
-              </Badge>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+/* ── Custom node/edge type registrations ── */
 
 const nodeTypes: NodeTypes = {
-  azure: AzureNode,
-  aws: AwsNode,
+  azure: AzureResourceNode,
+  aws: AWSResourceNode,
+  "resource-group": ResourceGroupNode,
+  "no-mapping": NoMappingNode,
+  "rg-summary": RGSummaryNode,
 };
 
-/* ──────────────────────────────────────────────────────────────── */
-/* Types                                                            */
-/* ──────────────────────────────────────────────────────────────── */
+const edgeTypes: EdgeTypes = {
+  relationship: RelationshipEdge,
+  mapping: MappingEdge,
+  aggregated: AggregatedEdge,
+};
+
+/* ── API response types ── */
 
 interface ApiResource {
   id: string;
   name: string;
   type: string;
   location: string | null;
-  recommendations: {
+  resourceGroup: string | null;
+  armId: string | null;
+  raw: string;
+  recommendations: Array<{
+    id: string;
+    azureResourceId: string;
     awsService: string;
     awsCategory: string;
     confidence: string;
     rationale: string;
     migrationNotes: string;
     alternatives: string;
-  }[];
+  }>;
+}
+
+interface ApiRelationship {
+  id: string;
+  sourceResourceId: string;
+  targetResourceId: string;
+  relationType: string;
+  confidence: string;
+  method: string;
+}
+
+interface RelationshipResponse {
+  relationships: ApiRelationship[];
+  stats: {
+    total: number;
+    byType: Record<string, number>;
+    byMethod: Record<string, number>;
+    byConfidence: Record<string, number>;
+  };
 }
 
 interface DetailInfo {
   label: string;
-  type: "azure" | "aws";
+  type: "azure" | "aws" | "resource-group" | "no-mapping";
   category: string;
-  confidence?: string;
-  count?: number;
   resourceId?: string;
+  resourceType?: string;
+  resourceGroup?: string | null;
+  location?: string | null;
+  confidence?: string;
+  awsService?: string;
 }
 
-/* ──────────────────────────────────────────────────────────────── */
-/* Category Toggle Panel                                            */
-/* ──────────────────────────────────────────────────────────────── */
+/* ── Relationship stats bar ── */
 
-function CategoryPanel({
-  categories,
-  hiddenCategories,
-  onToggle,
-  onShowAll,
-  onHideAll,
-  categoryCounts,
-}: {
-  categories: string[];
-  hiddenCategories: Set<string>;
-  onToggle: (cat: string) => void;
-  onShowAll: () => void;
-  onHideAll: () => void;
-  categoryCounts: Record<string, { azure: number; aws: number }>;
-}) {
+function RelationshipStats({ stats }: { stats: RelationshipResponse["stats"] | null }) {
+  if (!stats || stats.total === 0) return null;
   return (
-    <div className="absolute top-3 left-3 z-10 rounded-xl border bg-background/95 backdrop-blur-sm shadow-lg p-3 w-56">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-semibold text-foreground">Categories</span>
-        <div className="flex gap-1">
-          <button onClick={onShowAll} className="text-[10px] text-primary hover:underline">
-            All
-          </button>
-          <span className="text-muted-foreground text-[10px]">·</span>
-          <button onClick={onHideAll} className="text-[10px] text-primary hover:underline">
-            None
-          </button>
-        </div>
-      </div>
-      <div className="grid gap-0.5">
-        {categories.map((cat) => {
-          const meta = getCategoryMeta(cat);
-          const hidden = hiddenCategories.has(cat);
-          const counts = categoryCounts[cat];
-          return (
-            <button
-              key={cat}
-              onClick={() => onToggle(cat)}
-              className={`
-                flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-all
-                ${hidden ? "opacity-40 hover:opacity-60" : "hover:bg-muted"}
-              `}
-            >
-              <HugeiconsIcon
-                icon={hidden ? SquareIcon : CheckmarkSquare02Icon}
-                size={14}
-                className={hidden ? "text-muted-foreground" : "text-primary"}
-              />
-              <span
-                className="h-2.5 w-2.5 rounded-full shrink-0"
-                style={{ backgroundColor: meta.dotColor }}
-              />
-              <span className={`flex-1 text-left ${hidden ? "text-muted-foreground" : "text-foreground font-medium"}`}>
-                {cat}
-              </span>
-              {counts && (
-                <span className="text-[10px] text-muted-foreground tabular-nums">
-                  {counts.azure + counts.aws}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+    <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+      <span className="font-semibold text-foreground">{stats.total} relationships</span>
+      {Object.entries(stats.byType).map(([type, count]) => {
+        const meta = RELATION_TYPE_LABELS[type as RelationType];
+        return (
+          <span key={type} className="flex items-center gap-1">
+            <span className="h-1.5 w-3 rounded-sm" style={{ backgroundColor: meta?.color ?? "#888" }} />
+            {count}
+          </span>
+        );
+      })}
     </div>
   );
 }
 
-/* ──────────────────────────────────────────────────────────────── */
-/* Summary Stats                                                    */
-/* ──────────────────────────────────────────────────────────────── */
-
-function SummaryStats({ resources }: { resources: ApiResource[] }) {
-  const stats = useMemo(() => {
-    const total = resources.length;
-    const high = resources.filter((r) => r.recommendations.some((rec) => rec.confidence === "High")).length;
-    const medium = resources.filter((r) => r.recommendations.some((rec) => rec.confidence === "Medium")).length;
-    const low = resources.filter((r) => r.recommendations.some((rec) => rec.confidence === "Low")).length;
-    const none = total - high - medium - low;
-    const pct = total > 0 ? Math.round(((high + medium) / total) * 100) : 0;
-    return { total, high, medium, low, none, pct };
-  }, [resources]);
-
-  return (
-    <div className="flex items-center gap-3 text-xs">
-      <span className="font-semibold text-foreground">{stats.total} resources</span>
-      <div className="flex items-center gap-0.5 h-2 w-24 rounded-full overflow-hidden bg-muted">
-        {stats.high > 0 && (
-          <div className="h-full bg-green-500" style={{ width: `${(stats.high / stats.total) * 100}%` }} />
-        )}
-        {stats.medium > 0 && (
-          <div className="h-full bg-yellow-500" style={{ width: `${(stats.medium / stats.total) * 100}%` }} />
-        )}
-        {stats.low > 0 && (
-          <div className="h-full bg-orange-500" style={{ width: `${(stats.low / stats.total) * 100}%` }} />
-        )}
-        {stats.none > 0 && (
-          <div className="h-full bg-red-500" style={{ width: `${(stats.none / stats.total) * 100}%` }} />
-        )}
-      </div>
-      <span className="font-medium text-muted-foreground">{stats.pct}% ready</span>
-      <div className="mx-1 h-4 w-px bg-border" />
-      <span className="text-green-600">{stats.high} High</span>
-      <span className="text-yellow-600">{stats.medium} Med</span>
-      <span className="text-orange-600">{stats.low} Low</span>
-      <span className="text-red-600">{stats.none} None</span>
-    </div>
-  );
-}
-
-/* ──────────────────────────────────────────────────────────────── */
-/* Canvas Inner (needs ReactFlow context)                           */
-/* ──────────────────────────────────────────────────────────────── */
+/* ── Canvas inner (needs ReactFlow context) ── */
 
 function CanvasInner({
-  allNodes,
-  allEdges,
-  resources,
-  categories,
-  categoryCounts,
+  azureResources,
+  azureRelationships,
+  mappingRecommendations,
   onSelectNode,
 }: {
-  allNodes: Node[];
-  allEdges: Edge[];
-  resources: ApiResource[];
-  categories: string[];
-  categoryCounts: Record<string, { azure: number; aws: number }>;
+  azureResources: AzureResourceInput[];
+  azureRelationships: AzureResourceRelationship[];
+  mappingRecommendations: MappingRecommendationInput[];
   onSelectNode: (info: DetailInfo) => void;
 }) {
   const { fitView } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const [hiddenCategories, setHiddenCategories] = useState<Set<string>>(new Set());
-  const [searchQuery, setSearchQuery] = useState("");
-  const searchRef = useRef<HTMLInputElement>(null);
 
-  // Apply category visibility + search highlighting
+  // Filter state — smart defaults for large datasets
+  const [viewMode, setViewMode] = useState<ViewMode>("azure-only");
+  const [viewModeInit, setViewModeInit] = useState(false);
+  const [activeRelTypes, setActiveRelTypes] = useState<Set<RelationType>>(new Set(ALL_RELATION_TYPES));
+  const [activeConfLevels, setActiveConfLevels] = useState<Set<ConfidenceLevel>>(
+    new Set<ConfidenceLevel>(["High", "Definite"]),
+  );
+  const [searchTerm, setSearchTerm] = useState("");
+
+  // Progressive disclosure: which RGs are expanded (empty = overview mode)
+  const [expandedRGs, setExpandedRGs] = useState<Set<string>>(new Set());
+
+  const expandRG = useCallback((rg: string) => {
+    setExpandedRGs(new Set([rg]));
+  }, []);
+
+  const collapseAll = useCallback(() => {
+    setExpandedRGs(new Set());
+  }, []);
+
+  // Smart view mode default: "dual" for small datasets, "azure-only" for large
   useEffect(() => {
-    if (allNodes.length === 0) return;
-
-    const query = searchQuery.toLowerCase().trim();
-
-    // Build set of visible resource IDs based on hidden categories
-    const visibleResourceIds = new Set<string>();
-    const visibleAwsServices = new Set<string>();
-
-    for (const r of resources) {
-      const cat = r.recommendations[0]?.awsCategory ?? "Unknown";
-      if (hiddenCategories.has(cat)) continue;
-      visibleResourceIds.add(r.id);
-      for (const rec of r.recommendations) {
-        if (!hiddenCategories.has(rec.awsCategory)) {
-          visibleAwsServices.add(rec.awsService);
-        }
-      }
+    if (!viewModeInit && azureResources.length > 0) {
+      setViewMode(azureResources.length > 100 ? "azure-only" : "dual");
+      setViewModeInit(true);
     }
+  }, [azureResources.length, viewModeInit]);
 
-    const filteredNodes = allNodes
-      .filter((n) => {
-        if (n.type === "azure") {
-          const rid = (n.data as CanvasNode["data"]).resourceId;
-          return rid ? visibleResourceIds.has(rid) : true;
-        }
-        return visibleAwsServices.has((n.data as CanvasNode["data"]).label);
-      })
-      .map((n) => {
-        if (!query) return { ...n, data: { ...n.data, highlighted: undefined } };
-        const label = ((n.data as CanvasNode["data"]).label ?? "").toLowerCase();
-        const matches = label.includes(query);
-        return { ...n, data: { ...n.data, highlighted: matches ? true : false } };
-      });
+  // Resource groups for filter
+  const resourceGroups = useMemo(() => {
+    const rgs = new Set<string>();
+    for (const r of azureResources) {
+      if (r.resourceGroup) rgs.add(r.resourceGroup);
+    }
+    return [...rgs].sort();
+  }, [azureResources]);
 
-    const visibleNodeIds = new Set(filteredNodes.map((n) => n.id));
-    const filteredEdges = allEdges.filter(
-      (e) => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target)
-    );
+  const [disabledRGs, setDisabledRGs] = useState<Set<string>>(new Set());
 
-    setNodes(filteredNodes);
-    setEdges(filteredEdges);
+  // Active RGs = all resource groups minus disabled ones
+  const activeRGs = useMemo(() => {
+    const active = new Set<string>();
+    for (const rg of resourceGroups) {
+      if (!disabledRGs.has(rg)) active.add(rg);
+    }
+    return active;
+  }, [resourceGroups, disabledRGs]);
 
-    // Fit view after filter change
-    setTimeout(() => fitView({ padding: 0.15, duration: 300 }), 50);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hiddenCategories, searchQuery, allNodes, allEdges, resources]);
+  // Build AWS topology (client-side, pure function)
+  const awsTopology = useMemo(
+    () => buildAWSTopology(azureRelationships, mappingRecommendations, azureResources),
+    [azureRelationships, mappingRecommendations, azureResources],
+  );
 
-  const toggleCategory = useCallback((cat: string) => {
-    setHiddenCategories((prev) => {
+  // Build dual topology graph with filters + progressive disclosure
+  const graph = useMemo(() => {
+    const filters: DualTopologyFilters = {
+      resourceGroups: activeRGs.size === resourceGroups.length ? undefined : [...activeRGs],
+      relationTypes: activeRelTypes.size === ALL_RELATION_TYPES.length ? undefined : [...activeRelTypes],
+      confidenceLevels: activeConfLevels.size === ALL_CONFIDENCE_LEVELS.length ? undefined : [...activeConfLevels],
+      searchTerm: searchTerm.trim() || undefined,
+      viewMode,
+      expandedRGs: [...expandedRGs],
+    };
+
+    return buildDualTopologyGraph({
+      azureResources,
+      azureRelationships,
+      awsTopology,
+      mappingRecommendations,
+      filters,
+    });
+  }, [azureResources, azureRelationships, awsTopology, mappingRecommendations, activeRGs, resourceGroups.length, activeRelTypes, activeConfLevels, searchTerm, viewMode, expandedRGs]);
+
+  // Auto-collapse resource groups when node count exceeds threshold
+  const shouldAutoCollapse = graph.nodes.length > AUTO_COLLAPSE_NODE_THRESHOLD;
+
+  // Convert DualTopologyNode/Edge to React Flow Node/Edge
+  useEffect(() => {
+    const flowNodes: Node[] = graph.nodes.map((n: DualTopologyNode) => ({
+      id: n.id,
+      type: n.type,
+      position: n.position,
+      data: n.data,
+    }));
+
+    const flowEdges: Edge[] = graph.edges.map((e: DualTopologyEdge) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      type: e.type,
+      data: e.data,
+      animated: e.data.animated,
+      style: {
+        stroke: e.data.color,
+        strokeWidth: e.data.strokeWidth,
+        strokeDasharray: e.data.strokeDasharray,
+        opacity: 0.7,
+      },
+    }));
+
+    setNodes(flowNodes);
+    setEdges(flowEdges);
+
+    // Fit view after layout change
+    setTimeout(() => fitView({ padding: 0.12, duration: 300 }), 80);
+  }, [graph, setNodes, setEdges, fitView]);
+
+  // Toggle helpers
+  const toggleRelType = useCallback((t: RelationType) => {
+    setActiveRelTypes((prev) => {
       const next = new Set(prev);
-      if (next.has(cat)) next.delete(cat);
-      else next.add(cat);
+      if (next.has(t)) next.delete(t);
+      else next.add(t);
       return next;
     });
   }, []);
 
-  const showAll = useCallback(() => setHiddenCategories(new Set()), []);
-  const hideAll = useCallback(() => setHiddenCategories(new Set(categories)), [categories]);
+  const toggleConfLevel = useCallback((c: ConfidenceLevel) => {
+    setActiveConfLevels((prev) => {
+      const next = new Set(prev);
+      if (next.has(c)) next.delete(c);
+      else next.add(c);
+      return next;
+    });
+  }, []);
+
+  const toggleRG = useCallback((rg: string) => {
+    setDisabledRGs((prev) => {
+      const next = new Set(prev);
+      if (next.has(rg)) next.delete(rg);
+      else next.add(rg);
+      return next;
+    });
+  }, []);
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
-      const d = node.data as CanvasNode["data"];
+      // Progressive disclosure: expand RG on click
+      if (node.type === "rg-summary") {
+        const d = node.data as DualTopologyNode["data"];
+        expandRG(d.label);
+        return;
+      }
+
+      const d = node.data as DualTopologyNode["data"];
       onSelectNode({
         label: d.label,
-        type: node.type as "azure" | "aws",
+        type: node.type as DetailInfo["type"],
         category: d.category,
-        confidence: d.confidence,
-        count: d.count,
         resourceId: d.resourceId,
+        resourceType: d.resourceType,
+        resourceGroup: d.resourceGroup,
+        location: d.location,
+        confidence: d.confidence,
+        awsService: d.awsService,
       });
     },
-    [onSelectNode]
+    [onSelectNode, expandRG],
   );
+
+  const handleFitView = useCallback(() => {
+    fitView({ padding: 0.12, duration: 300 });
+  }, [fitView]);
 
   return (
     <div className="relative h-full">
-      {/* Category toggle panel */}
-      <CategoryPanel
-        categories={categories}
-        hiddenCategories={hiddenCategories}
-        onToggle={toggleCategory}
-        onShowAll={showAll}
-        onHideAll={hideAll}
-        categoryCounts={categoryCounts}
+      {/* Inject dash animation CSS */}
+      <style dangerouslySetInnerHTML={{ __html: DASH_ANIMATION_CSS }} />
+
+      {/* Topology toolbar with filters and search */}
+      <TopologyToolbar
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        activeRelTypes={activeRelTypes}
+        onToggleRelType={toggleRelType}
+        activeConfLevels={activeConfLevels}
+        onToggleConfLevel={toggleConfLevel}
+        resourceGroups={resourceGroups}
+        activeRGs={activeRGs}
+        onToggleRG={toggleRG}
+        searchTerm={searchTerm}
+        onSearchChange={setSearchTerm}
+        onFitView={handleFitView}
+        hasExpandedRGs={expandedRGs.size > 0}
+        onCollapseAll={collapseAll}
       />
 
-      {/* Search bar */}
-      <div className="absolute top-3 right-3 z-10 flex items-center gap-1">
-        <div className="relative">
-          <HugeiconsIcon icon={Search01Icon} size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            ref={searchRef}
-            type="text"
-            placeholder="Search resources..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-8 w-52 pl-8 pr-8 text-xs bg-background/95 backdrop-blur-sm"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery("")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            >
-              <HugeiconsIcon icon={Cancel01Icon} size={12} />
-            </button>
-          )}
+      {shouldAutoCollapse && (
+        <div className="absolute bottom-14 left-3 z-10 rounded-md border bg-yellow-50 dark:bg-yellow-950/30 px-3 py-1.5 text-[10px] text-yellow-700 dark:text-yellow-400">
+          Large graph ({graph.nodes.length} nodes) — resource groups auto-collapsed
         </div>
-      </div>
+      )}
 
       <ReactFlow
         nodes={nodes}
@@ -477,10 +401,12 @@ function CanvasInner({
         onEdgesChange={onEdgesChange}
         onNodeClick={onNodeClick}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         fitView
-        fitViewOptions={{ padding: 0.15 }}
-        minZoom={0.05}
+        fitViewOptions={{ padding: 0.12 }}
+        minZoom={0.02}
         maxZoom={2.5}
+        onlyRenderVisibleElements
         proOptions={{ hideAttribution: true }}
       >
         <Controls
@@ -490,8 +416,10 @@ function CanvasInner({
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
         <MiniMap
           nodeColor={(node) => {
-            const cat = (node.data as CanvasNode["data"])?.category ?? "Unknown";
-            return getCategoryMeta(cat).dotColor;
+            if (node.type === "azure") return "#3b82f6";
+            if (node.type === "aws") return "#f97316";
+            if (node.type === "resource-group" || node.type === "rg-summary") return "#93c5fd";
+            return "#9ca3af";
           }}
           maskColor="rgba(0,0,0,0.08)"
           className="!bg-background/90 !backdrop-blur-sm !border !border-border !rounded-lg"
@@ -503,129 +431,109 @@ function CanvasInner({
   );
 }
 
-/* ──────────────────────────────────────────────────────────────── */
-/* Main Page                                                        */
-/* ──────────────────────────────────────────────────────────────── */
+/* ── Main page ── */
 
-export default function MappingCanvasPage() {
+export default function MigrationTopologyPage() {
   const params = useParams<{ projectId: string }>();
-  const [allNodes, setAllNodes] = useState<Node[]>([]);
-  const [allEdges, setAllEdges] = useState<Edge[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<DetailInfo | null>(null);
-  const [resources, setResources] = useState<ApiResource[]>([]);
 
-  // Fetch mapping data
+  // Data state
+  const [apiResources, setApiResources] = useState<ApiResource[]>([]);
+  const [azureResources, setAzureResources] = useState<AzureResourceInput[]>([]);
+  const [azureRelationships, setAzureRelationships] = useState<AzureResourceRelationship[]>([]);
+  const [mappingRecommendations, setMappingRecommendations] = useState<MappingRecommendationInput[]>([]);
+  const [relStats, setRelStats] = useState<RelationshipResponse["stats"] | null>(null);
+
+  // Fetch all data in parallel
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch(`/api/projects/${params.projectId}/mapping`);
-        const json = await res.json();
-        if (!res.ok) {
-          setError(json.error ?? "Failed to load mappings");
-          return;
-        }
+        const [mappingRes, relRes] = await Promise.all([
+          fetch(`/api/projects/${params.projectId}/mapping`),
+          fetch(`/api/projects/${params.projectId}/relationships`),
+        ]);
 
-        const apiResources = json.data as ApiResource[];
-        setResources(apiResources);
+        // Process mapping response (resources + recommendations)
+        if (mappingRes.ok) {
+          const mappingJson = await mappingRes.json();
+          const resources = mappingJson.data as ApiResource[];
+          setApiResources(resources);
 
-        const withRecs: AzureResourceWithRecommendation[] = apiResources.map(
-          (r) => ({
+          // Convert to AzureResourceInput for the topology builder
+          const azInputs: AzureResourceInput[] = resources.map((r) => ({
             id: r.id,
             name: r.name,
             type: r.type,
             location: r.location,
-            recommendations: r.recommendations.map((rec) => ({
-              ...rec,
-              alternatives: (() => {
-                try {
-                  return JSON.parse(rec.alternatives);
-                } catch {
-                  return [];
-                }
-              })(),
+            resourceGroup: r.resourceGroup,
+            armId: r.armId,
+            raw: r.raw ?? "{}",
+          }));
+          setAzureResources(azInputs);
+
+          // Extract mapping recommendations
+          const recs: MappingRecommendationInput[] = resources.flatMap((r) =>
+            r.recommendations.map((rec) => ({
+              azureResourceId: r.id,
+              awsService: rec.awsService,
+              awsCategory: rec.awsCategory,
+              confidence: rec.confidence,
             })),
-          })
-        );
+          );
+          setMappingRecommendations(recs);
+        } else {
+          setError("Failed to load resources");
+        }
 
-        const graph = buildCanvasGraph(withRecs);
-
-        // Build flow nodes with extra metadata
-        const resourceMap = new Map(apiResources.map((r) => [r.id, r]));
-        const flowNodes: Node[] = graph.nodes.map((n) => {
-          const extra: Record<string, unknown> = {};
-          if (n.type === "azure" && n.data.resourceId) {
-            const r = resourceMap.get(n.data.resourceId);
-            if (r) extra.azureType = r.type;
-          }
-          return {
-            id: n.id,
-            type: n.type,
-            position: n.position,
-            data: { ...n.data, ...extra },
-          };
-        });
-
-        const flowEdges: Edge[] = graph.edges.map((e) => {
-          const color = CONFIDENCE_COLORS[e.data.confidence]?.stroke ?? "#888";
-          return {
-            id: e.id,
-            source: e.source,
-            target: e.target,
-            animated: e.data.confidence === "High",
-            style: { stroke: color, strokeWidth: 1.5, opacity: 0.7 },
-            markerEnd: { type: "arrowclosed" as const, color },
-            data: e.data,
-          };
-        });
-
-        setAllNodes(flowNodes);
-        setAllEdges(flowEdges);
+        // Process relationships response (graceful — canvas works without relationships)
+        if (relRes.ok) {
+          const relJson = (await relRes.json()) as RelationshipResponse;
+          const rels: AzureResourceRelationship[] = relJson.relationships.map((r) => ({
+            sourceResourceId: r.sourceResourceId,
+            targetResourceId: r.targetResourceId,
+            relationType: r.relationType as RelationType,
+            confidence: r.confidence as ConfidenceLevel,
+            method: r.method as AzureResourceRelationship["method"],
+          }));
+          setAzureRelationships(rels);
+          setRelStats(relJson.stats);
+        }
+        // If relationships fail, we still render the canvas without relationship edges
       } catch {
-        setError("Failed to load mappings");
+        setError("Failed to load canvas data");
       } finally {
         setLoading(false);
       }
     }
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.projectId]);
 
-  // Categories and counts
-  const { categories, categoryCounts } = useMemo(() => {
-    const counts: Record<string, { azure: number; aws: number }> = {};
-    const awsPerCategory = new Map<string, Set<string>>();
-
-    for (const r of resources) {
-      for (const rec of r.recommendations) {
-        const cat = rec.awsCategory || "Unknown";
-        if (!counts[cat]) counts[cat] = { azure: 0, aws: 0 };
-        counts[cat].azure++;
-        if (!awsPerCategory.has(cat)) awsPerCategory.set(cat, new Set());
-        awsPerCategory.get(cat)!.add(rec.awsService);
-      }
-    }
-    for (const [cat, services] of awsPerCategory) {
-      if (counts[cat]) counts[cat].aws = services.size;
-    }
-    return { categories: Object.keys(counts).sort(), categoryCounts: counts };
-  }, [resources]);
-
+  // Find selected resource details
   const selectedResource = useMemo(() => {
     if (!selectedNode?.resourceId) return null;
-    return resources.find((r) => r.id === selectedNode.resourceId) ?? null;
-  }, [selectedNode, resources]);
+    return apiResources.find((r) => r.id === selectedNode.resourceId) ?? null;
+  }, [selectedNode, apiResources]);
 
-  const selectedAwsMappedResources = useMemo(() => {
-    if (!selectedNode || selectedNode.type !== "aws") return [];
-    return resources.filter((r) =>
-      r.recommendations.some((rec) => rec.awsService === selectedNode.label)
+  // Find relationships for selected resource
+  const selectedRelationships = useMemo(() => {
+    if (!selectedNode?.resourceId) return [];
+    const rid = selectedNode.resourceId;
+    return azureRelationships.filter(
+      (r) => r.sourceResourceId === rid || r.targetResourceId === rid,
     );
-  }, [selectedNode, resources]);
+  }, [selectedNode, azureRelationships]);
+
+  // Resource lookup for relationship display
+  const resourceById = useMemo(() => {
+    const map = new Map<string, ApiResource>();
+    for (const r of apiResources) map.set(r.id, r);
+    return map;
+  }, [apiResources]);
 
   return (
-    <>
+    <TooltipProvider delayDuration={200}>
       <header className="flex h-14 shrink-0 items-center gap-2 border-b">
         <div className="flex items-center gap-2 px-4">
           <SidebarTrigger className="-ml-1" />
@@ -640,34 +548,27 @@ export default function MappingCanvasPage() {
               <BreadcrumbSeparator />
               <BreadcrumbItem>
                 <BreadcrumbLink asChild>
-                  <Link href={`/dashboard/migration/${params.projectId}`}>
-                    Project
-                  </Link>
+                  <Link href={`/dashboard/migration/${params.projectId}`}>Project</Link>
                 </BreadcrumbLink>
               </BreadcrumbItem>
               <BreadcrumbSeparator />
               <BreadcrumbItem>
-                <BreadcrumbPage>Canvas View</BreadcrumbPage>
+                <BreadcrumbPage>Topology Canvas</BreadcrumbPage>
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
         </div>
 
-        {/* Toolbar — right side */}
         <div className="ml-auto flex items-center gap-3 px-4">
-          {!loading && resources.length > 0 && (
-            <SummaryStats resources={resources} />
-          )}
-          <div className="mx-1 h-4 w-px bg-border" />
-          {/* Confidence legend */}
-          <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-            {Object.entries(CONFIDENCE_COLORS).map(([level, c]) => (
-              <span key={level} className="flex items-center gap-1">
-                <span className="inline-block h-2 w-4 rounded-sm" style={{ backgroundColor: c.stroke }} />
-                {level}
+          {!loading && <RelationshipStats stats={relStats} />}
+          {!loading && apiResources.length > 0 && (
+            <>
+              <div className="mx-1 h-4 w-px bg-border" />
+              <span className="text-xs text-muted-foreground">
+                {apiResources.length} resources
               </span>
-            ))}
-          </div>
+            </>
+          )}
           <div className="mx-1 h-4 w-px bg-border" />
           <Button variant="outline" size="sm" asChild>
             <Link href={`/dashboard/migration/${params.projectId}/mapping`}>
@@ -686,11 +587,9 @@ export default function MappingCanvasPage() {
           <div className="flex-1 min-h-0">
             <ReactFlowProvider>
               <CanvasInner
-                allNodes={allNodes}
-                allEdges={allEdges}
-                resources={resources}
-                categories={categories}
-                categoryCounts={categoryCounts}
+                azureResources={azureResources}
+                azureRelationships={azureRelationships}
+                mappingRecommendations={mappingRecommendations}
                 onSelectNode={setSelectedNode}
               />
             </ReactFlowProvider>
@@ -705,12 +604,15 @@ export default function MappingCanvasPage() {
           <SheetContent className="overflow-y-auto sm:max-w-md">
             <SheetHeader>
               <SheetTitle className="flex items-center gap-2">
-                {selectedNode?.type === "aws" && (
-                  <AwsServiceIcon service={selectedNode.label} size={28} />
+                {selectedNode?.type === "azure" && selectedNode.resourceType && (
+                  <AzureResourceIcon resourceType={selectedNode.resourceType} size={22} />
                 )}
-                {selectedNode?.type === "azure" && (
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800">
-                    <span className="text-[9px] font-bold text-blue-600 dark:text-blue-400">Az</span>
+                {selectedNode?.type === "aws" && selectedNode.awsService && (
+                  <AwsServiceIcon service={selectedNode.awsService} size={24} />
+                )}
+                {selectedNode?.type === "no-mapping" && (
+                  <div className="flex h-6 w-6 items-center justify-center rounded bg-gray-100 dark:bg-gray-800">
+                    <span className="text-[8px] text-gray-400">?</span>
                   </div>
                 )}
                 <span className="truncate">{selectedNode?.label}</span>
@@ -719,14 +621,19 @@ export default function MappingCanvasPage() {
 
             {selectedNode && (
               <div className="grid gap-4 text-sm p-4">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <Badge variant="outline">
-                    {selectedNode.type === "azure" ? "Azure Resource" : "AWS Service"}
+                    {selectedNode.type === "azure" ? "Azure Resource" :
+                     selectedNode.type === "aws" ? "AWS Service" :
+                     selectedNode.type === "resource-group" ? "Resource Group" :
+                     "No Mapping"}
                   </Badge>
-                  <Badge variant="secondary">{selectedNode.category}</Badge>
+                  {selectedNode.category && (
+                    <Badge variant="secondary">{selectedNode.category}</Badge>
+                  )}
                   {selectedNode.confidence && (
                     <Badge
-                      className={`ml-auto ${CONFIDENCE_COLORS[selectedNode.confidence]?.bg ?? ""} ${CONFIDENCE_COLORS[selectedNode.confidence]?.text ?? ""}`}
+                      className={`ml-auto ${CONFIDENCE_BADGE_COLORS[selectedNode.confidence]?.bg ?? ""} ${CONFIDENCE_BADGE_COLORS[selectedNode.confidence]?.text ?? ""}`}
                       variant="outline"
                     >
                       {selectedNode.confidence}
@@ -741,7 +648,9 @@ export default function MappingCanvasPage() {
                     <div className="grid gap-2 text-xs">
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Azure Type</span>
-                        <span className="font-mono text-[11px] text-right max-w-[60%] truncate">{selectedResource.type}</span>
+                        <span className="font-mono text-[11px] text-right max-w-[60%] truncate">
+                          {selectedResource.type}
+                        </span>
                       </div>
                       {selectedResource.location && (
                         <div className="flex justify-between">
@@ -749,71 +658,81 @@ export default function MappingCanvasPage() {
                           <span>{selectedResource.location}</span>
                         </div>
                       )}
-                    </div>
-                    <Separator />
-                    <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      AWS Mapping
-                    </div>
-                    {selectedResource.recommendations.map((rec, i) => (
-                      <div key={i} className="rounded-lg border p-3 grid gap-2">
-                        <div className="flex items-center gap-2">
-                          <AwsServiceIcon service={rec.awsService} size={22} />
-                          <span className="font-medium text-xs">{rec.awsService}</span>
-                          <Badge
-                            className={`text-[10px] ml-auto ${CONFIDENCE_COLORS[rec.confidence]?.bg ?? ""} ${CONFIDENCE_COLORS[rec.confidence]?.text ?? ""}`}
-                            variant="outline"
-                          >
-                            {rec.confidence}
-                          </Badge>
+                      {selectedResource.resourceGroup && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Resource Group</span>
+                          <span>{selectedResource.resourceGroup}</span>
                         </div>
-                        <p className="text-xs text-muted-foreground leading-relaxed">{rec.rationale}</p>
-                        {rec.migrationNotes && (
-                          <div className="rounded-md bg-muted p-2.5 text-xs">
-                            <span className="font-semibold">Migration Notes: </span>
-                            {rec.migrationNotes}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </>
-                )}
-
-                {/* AWS service details — all mapped resources */}
-                {selectedNode.type === "aws" && selectedAwsMappedResources.length > 0 && (
-                  <>
-                    <Separator />
-                    <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      {selectedAwsMappedResources.length} Azure resource{selectedAwsMappedResources.length !== 1 ? "s" : ""} mapped
+                      )}
                     </div>
-                    {selectedAwsMappedResources.map((r) => {
-                      const rec = r.recommendations.find(
-                        (rc) => rc.awsService === selectedNode.label
-                      );
-                      return (
-                        <div key={r.id} className="rounded-lg border p-3 grid gap-1.5">
-                          <div className="flex items-center gap-2">
-                            <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800">
-                              <span className="text-[7px] font-bold text-blue-600 dark:text-blue-400">Az</span>
-                            </div>
-                            <span className="font-medium text-xs truncate">{r.name}</span>
-                            {rec && (
+
+                    {/* Relationships */}
+                    {selectedRelationships.length > 0 && (
+                      <>
+                        <Separator />
+                        <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                          {selectedRelationships.length} Relationship{selectedRelationships.length !== 1 ? "s" : ""}
+                        </div>
+                        <div className="grid gap-1.5">
+                          {selectedRelationships.map((rel, i) => {
+                            const isSource = rel.sourceResourceId === selectedNode.resourceId;
+                            const otherId = isSource ? rel.targetResourceId : rel.sourceResourceId;
+                            const other = resourceById.get(otherId);
+                            const meta = RELATION_TYPE_LABELS[rel.relationType];
+                            return (
+                              <div key={i} className="flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs">
+                                <span
+                                  className="h-2 w-2 rounded-full shrink-0"
+                                  style={{ backgroundColor: meta?.color ?? "#888" }}
+                                />
+                                <span className="text-muted-foreground">
+                                  {isSource ? "→" : "←"}
+                                </span>
+                                <span className="truncate font-medium">
+                                  {other?.name ?? otherId.slice(0, 8)}
+                                </span>
+                                <Badge variant="outline" className="text-[9px] px-1 h-4 ml-auto shrink-0">
+                                  {rel.relationType}
+                                </Badge>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
+
+                    {/* AWS Mapping */}
+                    {selectedResource.recommendations.length > 0 && (
+                      <>
+                        <Separator />
+                        <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                          AWS Mapping
+                        </div>
+                        {selectedResource.recommendations.map((rec, i) => (
+                          <div key={i} className="rounded-lg border p-3 grid gap-2">
+                            <div className="flex items-center gap-2">
+                              <AwsServiceIcon service={rec.awsService} size={22} />
+                              <span className="font-medium text-xs">{rec.awsService}</span>
                               <Badge
-                                className={`text-[10px] ml-auto ${CONFIDENCE_COLORS[rec.confidence]?.bg ?? ""} ${CONFIDENCE_COLORS[rec.confidence]?.text ?? ""}`}
+                                className={`text-[10px] ml-auto ${CONFIDENCE_BADGE_COLORS[rec.confidence]?.bg ?? ""} ${CONFIDENCE_BADGE_COLORS[rec.confidence]?.text ?? ""}`}
                                 variant="outline"
                               >
                                 {rec.confidence}
                               </Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground leading-relaxed">
+                              {rec.rationale}
+                            </p>
+                            {rec.migrationNotes && (
+                              <div className="rounded-md bg-muted p-2.5 text-xs">
+                                <span className="font-semibold">Migration Notes: </span>
+                                {rec.migrationNotes}
+                              </div>
                             )}
                           </div>
-                          <div className="text-[10px] text-muted-foreground font-mono truncate">
-                            {r.type}
-                          </div>
-                          {rec?.rationale && (
-                            <p className="text-[11px] text-muted-foreground leading-relaxed">{rec.rationale}</p>
-                          )}
-                        </div>
-                      );
-                    })}
+                        ))}
+                      </>
+                    )}
                   </>
                 )}
               </div>
@@ -821,6 +740,6 @@ export default function MappingCanvasPage() {
           </SheetContent>
         </Sheet>
       </div>
-    </>
+    </TooltipProvider>
   );
 }

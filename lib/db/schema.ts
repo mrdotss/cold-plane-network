@@ -97,11 +97,39 @@ export const azureResources = pgTable(
     sku: text("sku"),
     tags: text("tags").notNull().default("{}"),
     raw: text("raw").notNull().default("{}"),
+    armId: text("arm_id"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => [
     index("idx_azure_resources_project").on(t.projectId),
     index("idx_azure_resources_type").on(t.type),
+  ],
+);
+
+// ─── Azure Resource Relationships (Migration Advisor v2) ─────────────────────
+
+export const azureResourceRelationships = pgTable(
+  "azure_resource_relationships",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    sourceResourceId: uuid("source_resource_id")
+      .notNull()
+      .references(() => azureResources.id, { onDelete: "cascade" }),
+    targetResourceId: uuid("target_resource_id")
+      .notNull()
+      .references(() => azureResources.id, { onDelete: "cascade" }),
+    relationType: varchar("relation_type", { length: 50 }).notNull(),
+    confidence: varchar("confidence", { length: 20 }).notNull(),
+    method: varchar("method", { length: 30 }).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_rel_project").on(t.projectId),
+    index("idx_rel_source").on(t.sourceResourceId),
+    index("idx_rel_target").on(t.targetResourceId),
   ],
 );
 

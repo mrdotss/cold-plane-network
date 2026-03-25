@@ -15,6 +15,13 @@
       "when": 1774074050799,
       "tag": "0001_powerful_mysterio",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1774331247999,
+      "tag": "0002_furry_gladiator",
+      "breakpoints": true
     }
   ]
 }

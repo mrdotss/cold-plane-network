@@ -7,6 +7,7 @@ import {
   auditEvents,
   projects,
   azureResources,
+  azureResourceRelationships,
   mappingRecommendations,
   sizingReports,
   chats,
@@ -19,6 +20,7 @@ const ALL_TABLES = {
   auditEvents,
   projects,
   azureResources,
+  azureResourceRelationships,
   mappingRecommendations,
   sizingReports,
   chats,
@@ -26,8 +28,8 @@ const ALL_TABLES = {
 } as const;
 
 describe("Drizzle schema — table definitions", () => {
-  it("defines exactly 9 tables", () => {
-    expect(Object.keys(ALL_TABLES)).toHaveLength(9);
+  it("defines exactly 10 tables", () => {
+    expect(Object.keys(ALL_TABLES)).toHaveLength(10);
   });
 
   it.each([
@@ -36,6 +38,7 @@ describe("Drizzle schema — table definitions", () => {
     ["auditEvents", "audit_events"],
     ["projects", "projects"],
     ["azureResources", "azure_resources"],
+    ["azureResourceRelationships", "azure_resource_relationships"],
     ["mappingRecommendations", "mapping_recommendations"],
     ["sizingReports", "sizing_reports"],
     ["chats", "chat"],
@@ -93,13 +96,26 @@ describe("Drizzle schema — column definitions", () => {
     const cols = getTableColumns(azureResources);
     expect(Object.keys(cols)).toEqual([
       "id", "projectId", "subscriptionId", "resourceGroup", "name", "type",
-      "kind", "location", "sku", "tags", "raw", "createdAt",
+      "kind", "location", "sku", "tags", "raw", "armId", "createdAt",
     ]);
     expect(cols.name.notNull).toBe(true);
     expect(cols.type.notNull).toBe(true);
     expect(cols.kind.notNull).toBe(false);
     expect(cols.tags.hasDefault).toBe(true);
     expect(cols.raw.hasDefault).toBe(true);
+    expect(cols.armId.notNull).toBe(false);
+  });
+
+  it("azureResourceRelationships has correct columns", () => {
+    const cols = getTableColumns(azureResourceRelationships);
+    expect(Object.keys(cols)).toEqual([
+      "id", "projectId", "sourceResourceId", "targetResourceId",
+      "relationType", "confidence", "method", "createdAt",
+    ]);
+    expect(cols.relationType.notNull).toBe(true);
+    expect(cols.confidence.notNull).toBe(true);
+    expect(cols.method.notNull).toBe(true);
+    expect(cols.createdAt.hasDefault).toBe(true);
   });
 
   it("mappingRecommendations has correct columns", () => {
@@ -175,6 +191,14 @@ describe("Drizzle schema — indexes", () => {
     expect(indexNames).toContain("idx_azure_resources_type");
   });
 
+  it("azureResourceRelationships has indexes on projectId, source, and target", () => {
+    const config = getTableConfig(azureResourceRelationships);
+    const indexNames = config.indexes.map((i) => i.config.name);
+    expect(indexNames).toContain("idx_rel_project");
+    expect(indexNames).toContain("idx_rel_source");
+    expect(indexNames).toContain("idx_rel_target");
+  });
+
   it("mappingRecommendations has index on azureResourceId", () => {
     const config = getTableConfig(mappingRecommendations);
     const indexNames = config.indexes.map((i) => i.config.name);
@@ -243,6 +267,24 @@ describe("Drizzle schema — foreign keys", () => {
     );
     expect(fk).toBeDefined();
     expect(fk!.onDelete).toBe("cascade");
+  });
+
+  it("azureResourceRelationships references projects with cascade delete", () => {
+    const config = getTableConfig(azureResourceRelationships);
+    const fk = config.foreignKeys.find((f) =>
+      f.reference().foreignColumns.some((c) => getTableName(c.table) === "projects"),
+    );
+    expect(fk).toBeDefined();
+    expect(fk!.onDelete).toBe("cascade");
+  });
+
+  it("azureResourceRelationships references azureResources for source and target with cascade delete", () => {
+    const config = getTableConfig(azureResourceRelationships);
+    const azureFks = config.foreignKeys.filter((f) =>
+      f.reference().foreignColumns.some((c) => getTableName(c.table) === "azure_resources"),
+    );
+    expect(azureFks).toHaveLength(2);
+    azureFks.forEach((fk) => expect(fk.onDelete).toBe("cascade"));
   });
 
   it("sizingReports references users", () => {
