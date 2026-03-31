@@ -10,12 +10,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { RepeatIcon, FileExportIcon } from "@hugeicons/core-free-icons";
 import { SummaryCards } from "./SummaryCards";
 import { ServiceCard } from "./ServiceCard";
 import { RecommendationsTable } from "./RecommendationsTable";
-import type { CfmScanSummary, CfmRecommendation } from "@/lib/cfm/types";
+import { ScanHistoryView } from "./ScanHistoryView";
+import { DeltaView } from "./DeltaView";
+import { ScheduleConfig } from "./ScheduleConfig";
+import type {
+  CfmScanSummary,
+  EnrichedRecommendation,
+} from "@/lib/cfm/types";
 import type { SerializedCfmAccount } from "./CfmLanding";
 
 /** Serialized scan shape passed from server component */
@@ -31,7 +38,7 @@ interface CfmDashboardProps {
   account: SerializedCfmAccount;
   accounts: SerializedCfmAccount[];
   scan: SerializedCfmScan | null;
-  recommendations: CfmRecommendation[];
+  recommendations: EnrichedRecommendation[];
 }
 
 function formatDate(iso: string | null): string {
@@ -82,8 +89,8 @@ export function CfmDashboard({
 
   const summary = scan?.summary ?? null;
 
-  // Zero-savings / no-scan state
-  if (!summary || summary.recommendationCount === 0) {
+  // No scan at all — show prompt to run first scan
+  if (!scan) {
     return (
       <div className="flex flex-col gap-4 p-4">
         <DashboardHeader
@@ -99,16 +106,12 @@ export function CfmDashboard({
         <div className="flex flex-1 items-center justify-center py-16">
           <div className="flex flex-col items-center gap-2 text-center max-w-sm">
             <p className="text-sm text-muted-foreground">
-              {scan
-                ? "Great news — no significant optimization opportunities found."
-                : "No scan results yet. Run a scan to see cost optimization recommendations."}
+              No scan results yet. Run a scan to see cost optimization recommendations.
             </p>
-            {!scan && (
-              <Button size="sm" onClick={handleRescan}>
-                <HugeiconsIcon icon={RepeatIcon} data-icon="inline-start" strokeWidth={2} />
-                Run Scan
-              </Button>
-            )}
+            <Button size="sm" onClick={handleRescan}>
+              <HugeiconsIcon icon={RepeatIcon} data-icon="inline-start" strokeWidth={2} />
+              Run Scan
+            </Button>
           </div>
         </div>
       </div>
@@ -127,20 +130,52 @@ export function CfmDashboard({
       {rescanError && (
         <p className="text-xs text-destructive px-1">{rescanError}</p>
       )}
-      <SummaryCards summary={summary} />
-      {/* Service grid */}
-      {summary.serviceBreakdown.length > 0 && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {summary.serviceBreakdown.map((svc) => (
-            <ServiceCard
-              key={svc.service}
-              accountId={account.id}
-              service={svc}
-            />
-          ))}
-        </div>
-      )}
-      <RecommendationsTable recommendations={recommendations} />
+
+      <Tabs defaultValue="overview">
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="history">History & Trends</TabsTrigger>
+          <TabsTrigger value="compare">Compare</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview">
+          <div className="flex flex-col gap-4">
+            {summary && <SummaryCards summary={summary} />}
+            {/* Service grid */}
+            {summary && summary.serviceBreakdown.length > 0 && (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {summary.serviceBreakdown.map((svc) => (
+                  <ServiceCard
+                    key={svc.service}
+                    accountId={account.id}
+                    service={svc}
+                  />
+                ))}
+              </div>
+            )}
+            {summary && summary.recommendationCount === 0 ? (
+              <div className="flex items-center justify-center py-8">
+                <p className="text-sm text-muted-foreground">
+                  Great news — no significant optimization opportunities found.
+                </p>
+              </div>
+            ) : (
+              <RecommendationsTable
+                recommendations={recommendations}
+                accountId={account.id}
+              />
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="history">
+          <ScanHistoryView accountId={account.id} />
+        </TabsContent>
+
+        <TabsContent value="compare">
+          <DeltaView accountId={account.id} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
@@ -191,6 +226,7 @@ function DashboardHeader({
         )}
       </div>
       <div className="flex items-center gap-2">
+        <ScheduleConfig accountId={account.id} />
         <Button variant="outline" size="sm" onClick={onRescan}>
           <HugeiconsIcon icon={RepeatIcon} data-icon="inline-start" strokeWidth={2} />
           Re-scan

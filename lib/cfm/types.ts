@@ -76,6 +76,8 @@ export interface CfmRecommendation {
 
 export type ScanProgressEvent =
   | { type: "service_started"; service: string }
+  | { type: "service_collecting"; service: string; detail: string }
+  | { type: "data_collected"; resourceCount: number }
   | {
       type: "service_complete";
       service: string;
@@ -129,4 +131,131 @@ export interface ExportRequest {
 export interface RecommendationsResponse {
   recommendations: CfmRecommendation[];
   total: number;
+}
+
+// ─── Scan History & Trending ────────────────────────────────────────────────
+
+export interface ScanHistoryEntry {
+  id: string;
+  status: string;
+  summary: CfmScanSummary | null;
+  createdAt: string;
+  completedAt: string | null;
+}
+
+export interface TrendDataPoint {
+  scanId: string;
+  date: string;
+  totalMonthlySpend: number;
+  totalPotentialSavings: number;
+  recommendationCount: number;
+}
+
+export interface ScanHistoryResponse {
+  scans: ScanHistoryEntry[];
+  trend: TrendDataPoint[];
+  total: number;
+}
+
+// ─── Recommendation Lifecycle ───────────────────────────────────────────────
+
+export type RecommendationLifecycleStatus =
+  | "open"
+  | "acknowledged"
+  | "implemented"
+  | "verified";
+
+export interface CfmRecommendationTracking {
+  id: string;
+  accountId: string;
+  resourceId: string;
+  service: string;
+  status: RecommendationLifecycleStatus;
+  firstSeenScanId: string;
+  lastSeenScanId: string | null;
+  acknowledgedAt: Date | null;
+  implementedAt: Date | null;
+  verifiedAt: Date | null;
+  verifiedScanId: string | null;
+  notes: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/** Valid lifecycle transitions. Terminal: verified has no outgoing transitions. */
+export const LIFECYCLE_TRANSITIONS: Record<
+  RecommendationLifecycleStatus,
+  RecommendationLifecycleStatus[]
+> = {
+  open: ["acknowledged"],
+  acknowledged: ["implemented", "open"],
+  implemented: ["verified", "acknowledged"],
+  verified: [],
+};
+
+/** Enriched recommendation with lifecycle status for display. */
+export interface EnrichedRecommendation extends CfmRecommendation {
+  lifecycleStatus: RecommendationLifecycleStatus;
+  trackingId: string | null;
+  acknowledgedAt: Date | null;
+  implementedAt: Date | null;
+  verifiedAt: Date | null;
+  notes: string | null;
+}
+
+// ─── Delta Reports ──────────────────────────────────────────────────────────
+
+export type DeltaCategory = "new" | "resolved" | "changed" | "unchanged";
+
+export interface DeltaRecommendation {
+  category: DeltaCategory;
+  resourceId: string;
+  service: string;
+  resourceName: string | null;
+  current?: CfmRecommendation;
+  previous?: CfmRecommendation;
+  changes?: {
+    priorityChanged: boolean;
+    costChanged: boolean;
+    savingsChanged: boolean;
+    effortChanged: boolean;
+    recommendationChanged: boolean;
+  };
+}
+
+export interface DeltaSummary {
+  fromScanId: string;
+  toScanId: string;
+  fromDate: string;
+  toDate: string;
+  spendChange: number;
+  savingsChange: number;
+  newCount: number;
+  resolvedCount: number;
+  changedCount: number;
+  unchangedCount: number;
+}
+
+export interface DeltaReport {
+  summary: DeltaSummary;
+  recommendations: DeltaRecommendation[];
+}
+
+// ─── Scheduled Scans ────────────────────────────────────────────────────────
+
+export type ScheduleFrequency = "daily" | "weekly" | "monthly";
+
+export interface CfmSchedule {
+  id: string;
+  accountId: string;
+  userId: string;
+  frequency: ScheduleFrequency;
+  dayOfWeek: number | null;
+  dayOfMonth: number | null;
+  hour: number;
+  enabled: boolean;
+  lastRunAt: Date | null;
+  nextRunAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
 }

@@ -39,7 +39,56 @@ export const exportSchema = z.object({
   format: z.enum(["excel", "pdf"]),
 });
 
+export const scanHistoryQuerySchema = z.object({
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+export const compareQuerySchema = z.object({
+  from: z.string().uuid("'from' must be a valid scan ID"),
+  to: z.string().uuid("'to' must be a valid scan ID"),
+});
+
+export const updateTrackingSchema = z.object({
+  status: z.enum(["open", "acknowledged", "implemented", "verified"]),
+  notes: z.string().max(500).optional(),
+});
+
+export const trackingQuerySchema = z.object({
+  status: z
+    .enum(["open", "acknowledged", "implemented", "verified"])
+    .optional(),
+});
+
+export const upsertScheduleSchema = z
+  .object({
+    frequency: z.enum(["daily", "weekly", "monthly"]),
+    dayOfWeek: z.number().int().min(0).max(6).optional(),
+    dayOfMonth: z.number().int().min(1).max(28).optional(),
+    hour: z.number().int().min(0).max(23).default(6),
+    enabled: z.boolean().default(true),
+  })
+  .refine(
+    (data) => {
+      if (data.frequency === "weekly" && data.dayOfWeek === undefined)
+        return false;
+      if (data.frequency === "monthly" && data.dayOfMonth === undefined)
+        return false;
+      return true;
+    },
+    {
+      message:
+        "dayOfWeek required for weekly, dayOfMonth required for monthly",
+    },
+  );
+
 export type CreateAccountInput = z.infer<typeof createAccountSchema>;
 export type UpdateAccountInput = z.infer<typeof updateAccountSchema>;
 export type StartScanInput = z.infer<typeof startScanSchema>;
 export type ExportInput = z.infer<typeof exportSchema>;
+export type ScanHistoryQueryInput = z.infer<typeof scanHistoryQuerySchema>;
+export type CompareQueryInput = z.infer<typeof compareQuerySchema>;
+export type UpdateTrackingInput = z.infer<typeof updateTrackingSchema>;
+export type UpsertScheduleInput = z.infer<typeof upsertScheduleSchema>;

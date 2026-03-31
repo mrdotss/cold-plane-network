@@ -34,6 +34,12 @@ export const AUDIT_EVENT_TYPES = [
   "CFM_SCAN_STARTED",
   "CFM_SCAN_COMPLETED",
   "CFM_REPORT_EXPORTED",
+  "CFM_SCHEDULE_CREATED",
+  "CFM_SCHEDULE_UPDATED",
+  "CFM_SCHEDULE_DELETED",
+  "CFM_SCAN_SCHEDULED",
+  "CFM_RECOMMENDATION_STATUS_CHANGED",
+  "CFM_RECOMMENDATION_AUTO_VERIFIED",
 ] as const;
 
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
@@ -72,6 +78,12 @@ export const METADATA_ALLOWLISTS: Record<AuditEventType, readonly string[]> = {
   CFM_SCAN_STARTED: ["scanId", "accountId", "services", "regions"],
   CFM_SCAN_COMPLETED: ["scanId", "totalSavings", "recommendationCount"],
   CFM_REPORT_EXPORTED: ["scanId", "format"],
+  CFM_SCHEDULE_CREATED: ["accountId", "frequency", "hour"],
+  CFM_SCHEDULE_UPDATED: ["accountId", "frequency", "hour", "enabled"],
+  CFM_SCHEDULE_DELETED: ["accountId"],
+  CFM_SCAN_SCHEDULED: ["scanId", "accountId", "scheduleId"],
+  CFM_RECOMMENDATION_STATUS_CHANGED: ["trackingId", "accountId", "resourceId", "fromStatus", "toStatus"],
+  CFM_RECOMMENDATION_AUTO_VERIFIED: ["trackingId", "accountId", "resourceId", "scanId"],
 } as const;
 
 export interface AuditEventInput {

@@ -94,6 +94,10 @@ export interface SpecResource {
   dependsOn?: string[];
   /** Explicit connection references by resource name. */
   connectTo?: string[];
+  /** Start line in the raw YAML (1-based). */
+  lineStart?: number;
+  /** End line in the raw YAML (1-based, inclusive). */
+  lineEnd?: number;
 }
 
 /** Diagnostic produced during parsing or validation. */

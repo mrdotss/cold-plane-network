@@ -186,7 +186,11 @@ export function buildGraphIR(parsed: ParsedSpec): BuildGraphResult {
       id,
       type: resource.type,
       label: resource.name,
-      meta: { ...resource.properties },
+      meta: {
+        ...resource.properties,
+        ...(resource.lineStart != null && { lineStart: resource.lineStart }),
+        ...(resource.lineEnd != null && { lineEnd: resource.lineEnd }),
+      },
     };
 
     if (parentId) {

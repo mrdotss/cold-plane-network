@@ -41,6 +41,7 @@ const ContainmentEdge = memo(function ContainmentEdge(props: EdgeProps) {
             className="pointer-events-none absolute rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground shadow-sm border border-border"
             style={{
               transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+              zIndex: 1000,
             }}
           >
             contains
@@ -101,6 +102,7 @@ const ReferenceEdge = memo(function ReferenceEdge(props: EdgeProps) {
             className="pointer-events-none absolute rounded bg-foreground px-1.5 py-0.5 text-[10px] font-medium text-background shadow-sm"
             style={{
               transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+              zIndex: 1000,
             }}
           >
             {edgeKind}
@@ -146,6 +148,7 @@ const InferredEdge = memo(function InferredEdge(props: EdgeProps) {
             className="pointer-events-none absolute rounded-md bg-primary px-2 py-1 text-[10px] font-medium text-primary-foreground shadow-md"
             style={{
               transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+              zIndex: 1000,
             }}
           >
             <span className="opacity-70">inferred:</span> {reason}

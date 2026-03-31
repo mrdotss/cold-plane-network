@@ -9,7 +9,9 @@ import { validateSpec } from "@/lib/spec/validator";
 import { buildGraphIR, type BuildGraphResult } from "@/lib/spec/graph-builder";
 import { diffGraphIR, isStructuralChange } from "@/lib/topology/utils";
 import { layoutGraph, type PositionedNode } from "@/lib/topology/layout";
-import type { Node, Edge } from "@xyflow/react";
+import type { Node, Edge, NodeChange, Connection } from "@xyflow/react";
+import { applyNodeChanges, addEdge } from "@xyflow/react";
+import { addConnectTo } from "@/lib/spec/yaml-mutator";
 
 const DEBOUNCE_MS = 200;
 
@@ -31,6 +33,9 @@ export interface StudioState {
   setShowInferredEdges: (show: boolean) => void;
   hasErrors: boolean;
   isEmpty: boolean;
+  handleNodesChange: (changes: NodeChange[]) => void;
+  handleConnect: (connection: Connection) => void;
+  handleConnectStart: (nodeId: string | null) => void;
 }
 
 /**
@@ -51,6 +56,7 @@ export function useStudioPipeline(initialSpec: string = ""): StudioState {
   const prevGraphRef = useRef<GraphIR>(EMPTY_GRAPH);
   const prevPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const connectStartNodeRef = useRef<string | null>(null);
 
   const setSpecText = useCallback((text: string) => {
     setSpecTextRaw(text);
@@ -147,6 +153,69 @@ export function useStudioPipeline(initialSpec: string = ""): StudioState {
     };
   }, [specText]);
 
+  // Handle node position changes (drag)
+  const handleNodesChange = useCallback(
+    (changes: NodeChange[]) => {
+      setFlowNodes((nds) => applyNodeChanges(changes, nds));
+      // Update position cache for drag changes
+      for (const change of changes) {
+        if (change.type === "position" && change.position) {
+          prevPositionsRef.current.set(change.id, change.position);
+        }
+      }
+    },
+    []
+  );
+
+  // Track which node the user started dragging from
+  const handleConnectStart = useCallback(
+    (nodeId: string | null) => {
+      connectStartNodeRef.current = nodeId;
+    },
+    []
+  );
+
+  // Handle manual edge connections → mutate YAML to add connectTo
+  const handleConnect = useCallback(
+    (connection: Connection) => {
+      // Use the node the user actually started dragging from as the semantic source
+      const dragStartId = connectStartNodeRef.current;
+      const actualSourceId = dragStartId ?? connection.source;
+      const actualTargetId = actualSourceId === connection.source
+        ? connection.target
+        : connection.source;
+
+      const sourceNode = flowNodes.find((n) => n.id === actualSourceId);
+      const targetNode = flowNodes.find((n) => n.id === actualTargetId);
+      if (!sourceNode || !targetNode) return;
+
+      const sourceName = (sourceNode.data as { label?: string })?.label;
+      const targetName = (targetNode.data as { label?: string })?.label;
+      if (!sourceName || !targetName) return;
+
+      // Add visual edge immediately
+      setFlowEdges((eds) =>
+        addEdge(
+          {
+            ...connection,
+            type: "reference",
+            data: { meta: { edgeKind: "connectTo" }, relationType: "reference" },
+          },
+          eds
+        )
+      );
+
+      // Mutate YAML to add connectTo
+      const updated = addConnectTo(specText, sourceName, targetName);
+      if (updated !== specText) {
+        setSpecTextRaw(updated);
+      }
+
+      connectStartNodeRef.current = null;
+    },
+    [flowNodes, specText]
+  );
+
   const hasErrors = useMemo(
     () => diagnostics.some((d) => d.severity === "error"),
     [diagnostics]
@@ -170,5 +239,8 @@ export function useStudioPipeline(initialSpec: string = ""): StudioState {
     setShowInferredEdges,
     hasErrors,
     isEmpty,
+    handleNodesChange,
+    handleConnect,
+    handleConnectStart,
   };
 }

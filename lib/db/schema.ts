@@ -8,6 +8,7 @@ import {
   integer,
   jsonb,
   numeric,
+  boolean,
   index,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
@@ -263,6 +264,7 @@ export const cfmScans = pgTable(
   (t) => [
     index("idx_cfm_scans_account").on(t.accountId),
     index("idx_cfm_scans_user_created").on(t.userId, t.createdAt),
+    index("idx_cfm_scans_account_completed").on(t.accountId, t.completedAt),
   ],
 );
 
@@ -294,5 +296,73 @@ export const cfmRecommendations = pgTable(
     index("idx_cfm_rec_scan").on(t.scanId),
     index("idx_cfm_rec_scan_service").on(t.scanId, t.service),
     index("idx_cfm_rec_scan_priority").on(t.scanId, t.priority),
+  ],
+);
+
+// ─── CFM Recommendation Tracking (Lifecycle) ────────────────────────────────
+
+export const cfmRecommendationTracking = pgTable(
+  "cfm_recommendation_tracking",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => cfmAccounts.id, { onDelete: "cascade" }),
+    resourceId: text("resource_id").notNull(),
+    service: varchar("service", { length: 50 }).notNull(),
+    status: varchar("status", { length: 20 }).notNull().default("open"),
+    firstSeenScanId: uuid("first_seen_scan_id")
+      .notNull()
+      .references(() => cfmScans.id, { onDelete: "set null" }),
+    lastSeenScanId: uuid("last_seen_scan_id").references(() => cfmScans.id, {
+      onDelete: "set null",
+    }),
+    acknowledgedAt: timestamp("acknowledged_at"),
+    implementedAt: timestamp("implemented_at"),
+    verifiedAt: timestamp("verified_at"),
+    verifiedScanId: uuid("verified_scan_id").references(() => cfmScans.id, {
+      onDelete: "set null",
+    }),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_cfm_tracking_account").on(t.accountId),
+    index("idx_cfm_tracking_account_status").on(t.accountId, t.status),
+    uniqueIndex("idx_cfm_tracking_account_resource").on(
+      t.accountId,
+      t.resourceId,
+      t.service,
+    ),
+  ],
+);
+
+// ─── CFM Schedules ──────────────────────────────────────────────────────────
+
+export const cfmSchedules = pgTable(
+  "cfm_schedules",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => cfmAccounts.id, { onDelete: "cascade" })
+      .unique(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id),
+    frequency: varchar("frequency", { length: 10 }).notNull(),
+    dayOfWeek: integer("day_of_week"),
+    dayOfMonth: integer("day_of_month"),
+    hour: integer("hour").notNull().default(6),
+    enabled: boolean("enabled").notNull().default(true),
+    lastRunAt: timestamp("last_run_at"),
+    nextRunAt: timestamp("next_run_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_cfm_schedules_account").on(t.accountId),
+    index("idx_cfm_schedules_next_run").on(t.enabled, t.nextRunAt),
   ],
 );

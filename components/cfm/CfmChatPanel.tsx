@@ -47,7 +47,7 @@ function buildCfmContext(props: CfmChatPanelProps): string {
     JSON.stringify(recs, null, 2),
     "",
     "## Instructions",
-    "Help the user understand the recommendations, answer questions about specific resources, suggest implementation steps, and provide additional analysis if requested. You have access to the customer's AWS account via CFM MCP tools — use them to look up additional details when the user asks.",
+    "Help the user understand the recommendations, answer questions about specific resources, suggest implementation steps, and provide additional analysis if requested. Use your CPN MCP tools (pricing lookups, CFM tips, cost explorer data) to provide detailed answers. Base your analysis on the findings data provided above.",
   ].join("\n");
 }
 

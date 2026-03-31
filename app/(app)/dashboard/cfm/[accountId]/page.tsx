@@ -13,17 +13,26 @@ import {
   getAccountById,
   getAccountsByUser,
   getLatestScanForAccount,
-  getRecommendationsByScan,
+  getEnrichedRecommendations,
+  getScanByIdForAccount,
 } from "@/lib/cfm/queries";
 import { redirect } from "next/navigation";
 import { CfmDashboard } from "@/components/cfm/CfmDashboard";
-import type { CfmScanSummary, CfmRecommendation } from "@/lib/cfm/types";
+import type {
+  CfmScanSummary,
+  EnrichedRecommendation,
+  RecommendationLifecycleStatus,
+} from "@/lib/cfm/types";
 
 interface AccountDashboardPageProps {
   params: Promise<{ accountId: string }>;
+  searchParams: Promise<{ scan?: string }>;
 }
 
-export default async function AccountDashboardPage({ params }: AccountDashboardPageProps) {
+export default async function AccountDashboardPage({
+  params,
+  searchParams,
+}: AccountDashboardPageProps) {
   let userId: string;
   try {
     const auth = await requireAuth();
@@ -33,6 +42,7 @@ export default async function AccountDashboardPage({ params }: AccountDashboardP
   }
 
   const { accountId } = await params;
+  const { scan: scanIdParam } = await searchParams;
   const account = await getAccountById(accountId, userId);
 
   if (!account) {
@@ -42,23 +52,44 @@ export default async function AccountDashboardPage({ params }: AccountDashboardP
   // Fetch all user accounts for the account selector
   const allAccounts = await getAccountsByUser(userId);
 
-  // Fetch latest scan and its recommendations
-  const latestScan = await getLatestScanForAccount(accountId);
-  const recommendations: CfmRecommendation[] = latestScan
-    ? (await getRecommendationsByScan(latestScan.id)).map((r) => ({
-        id: r.id,
-        scanId: r.scanId,
-        service: r.service,
-        resourceId: r.resourceId,
-        resourceName: r.resourceName,
-        priority: r.priority as CfmRecommendation["priority"],
-        recommendation: r.recommendation,
-        currentCost: Number(r.currentCost),
-        estimatedSavings: Number(r.estimatedSavings),
-        effort: r.effort as CfmRecommendation["effort"],
-        metadata: (r.metadata ?? {}) as Record<string, unknown>,
-        createdAt: r.createdAt,
-      }))
+  // Fetch the requested scan (by param) or the latest scan
+  let targetScan;
+  if (scanIdParam) {
+    // Historical view: load a specific scan
+    targetScan = await getScanByIdForAccount(scanIdParam, accountId, userId);
+    // Fall back to latest if param scan not found
+    if (!targetScan) {
+      targetScan = await getLatestScanForAccount(accountId);
+    }
+  } else {
+    targetScan = await getLatestScanForAccount(accountId);
+  }
+
+  // Fetch enriched recommendations (with lifecycle data)
+  const recommendations: EnrichedRecommendation[] = targetScan
+    ? (await getEnrichedRecommendations(targetScan.id, accountId)).map(
+        (r) => ({
+          id: r.id,
+          scanId: r.scanId,
+          service: r.service,
+          resourceId: r.resourceId,
+          resourceName: r.resourceName,
+          priority: r.priority as EnrichedRecommendation["priority"],
+          recommendation: r.recommendation,
+          currentCost: Number(r.currentCost),
+          estimatedSavings: Number(r.estimatedSavings),
+          effort: r.effort as EnrichedRecommendation["effort"],
+          metadata: (r.metadata ?? {}) as Record<string, unknown>,
+          createdAt: r.createdAt,
+          lifecycleStatus:
+            (r.lifecycleStatus as RecommendationLifecycleStatus) ?? "open",
+          trackingId: r.trackingId ?? null,
+          acknowledgedAt: r.acknowledgedAt ?? null,
+          implementedAt: r.implementedAt ?? null,
+          verifiedAt: r.verifiedAt ?? null,
+          notes: r.notes ?? null,
+        }),
+      )
     : [];
 
   // Serialize for client component boundary
@@ -90,13 +121,13 @@ export default async function AccountDashboardPage({ params }: AccountDashboardP
     updatedAt: a.updatedAt.toISOString(),
   }));
 
-  const serializedScan = latestScan
+  const serializedScan = targetScan
     ? {
-        id: latestScan.id,
-        accountId: latestScan.accountId,
-        status: latestScan.status,
-        summary: (latestScan.summary as CfmScanSummary) ?? null,
-        completedAt: latestScan.completedAt?.toISOString() ?? null,
+        id: targetScan.id,
+        accountId: targetScan.accountId,
+        status: targetScan.status,
+        summary: (targetScan.summary as CfmScanSummary) ?? null,
+        completedAt: targetScan.completedAt?.toISOString() ?? null,
       }
     : null;
 

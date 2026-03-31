@@ -6,7 +6,10 @@ import {
   Controls,
   Background,
   BackgroundVariant,
+  ConnectionMode,
   type NodeMouseHandler,
+  type NodeChange,
+  type Connection,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { topologyNodeTypes } from "@/lib/topology/node-types";
@@ -18,6 +21,9 @@ interface TopologyCanvasProps {
   edges: Edge[];
   selectedNodeId: string | null;
   onNodeSelect: (nodeId: string | null) => void;
+  onNodesChange?: (changes: NodeChange[]) => void;
+  onConnect?: (connection: Connection) => void;
+  onConnectStart?: (nodeId: string | null) => void;
 }
 
 export function TopologyCanvas({
@@ -25,6 +31,9 @@ export function TopologyCanvas({
   edges,
   selectedNodeId,
   onNodeSelect,
+  onNodesChange,
+  onConnect,
+  onConnectStart,
 }: TopologyCanvasProps) {
   // Memoize node/edge types to prevent React Flow re-registration
   const nodeTypes = useMemo(() => topologyNodeTypes, []);
@@ -60,6 +69,10 @@ export function TopologyCanvas({
         edgeTypes={edgeTypes}
         onNodeClick={handleNodeClick}
         onPaneClick={handlePaneClick}
+        onNodesChange={onNodesChange}
+        onConnect={onConnect}
+        onConnectStart={(_event, params) => onConnectStart?.(params.nodeId)}
+        connectionMode={ConnectionMode.Loose}
         fitView
         fitViewOptions={{ padding: 0.2 }}
         minZoom={0.1}

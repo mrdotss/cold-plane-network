@@ -7,9 +7,10 @@ import { SpecForm } from "./SpecForm";
 interface EditorTabsProps {
   specText: string;
   onSpecChange: (text: string) => void;
+  scrollToLine?: number;
 }
 
-export function EditorTabs({ specText, onSpecChange }: EditorTabsProps) {
+export function EditorTabs({ specText, onSpecChange, scrollToLine }: EditorTabsProps) {
   return (
     <Tabs defaultValue="editor" className="flex flex-col h-full">
       <div className="shrink-0 px-2 pt-1">
@@ -19,7 +20,7 @@ export function EditorTabs({ specText, onSpecChange }: EditorTabsProps) {
         </TabsList>
       </div>
       <TabsContent value="editor" className="flex-1 min-h-0">
-        <SpecEditor value={specText} onChange={onSpecChange} />
+        <SpecEditor value={specText} onChange={onSpecChange} scrollToLine={scrollToLine} />
       </TabsContent>
       <TabsContent value="form" className="flex-1 min-h-0 overflow-auto">
         <SpecForm specText={specText} onSpecChange={onSpecChange} />

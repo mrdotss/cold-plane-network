@@ -2,8 +2,14 @@ import "server-only";
 
 import { assumeRole } from "./aws-connection";
 import {
+  collectAccountData,
+  formatCollectedData,
+} from "./aws-collector";
+import {
   updateScanStatus,
   insertRecommendations,
+  syncTrackingAfterScan,
+  autoVerifyImplementedRecommendations,
 } from "./queries";
 import { createConversation } from "@/lib/chat/agent-client";
 import { getBearerToken } from "@/lib/sizing/agent-client";
@@ -49,22 +55,27 @@ export function buildScanPrompt(account: {
   awsAccountId: string;
   regions: string[];
   services: string[];
-}): string {
+}, collectedData: string): string {
   return `You are analyzing an AWS account for cost optimization opportunities.
+You have been provided with pre-collected resource inventory data and cost metrics below. Use this data to produce your analysis — do NOT attempt to query AWS APIs yourself.
 
 ## Account Context
 - AWS Account ID: ${account.awsAccountId}
-- Regions to analyze: ${account.regions.join(", ")}
-- Services to analyze: ${account.services.join(", ")}
+- Regions analyzed: ${account.regions.join(", ")}
+- Services analyzed: ${account.services.join(", ")}
+
+## Pre-Collected AWS Data
+
+${collectedData}
 
 ## Instructions
-Analyze each of the specified services across the specified regions. For each service:
-1. Identify underutilized, idle, or over-provisioned resources
-2. Calculate current monthly spend and potential savings
+Using the resource data and cost metrics above, analyze each service for cost optimization opportunities:
+1. Identify underutilized, idle, or over-provisioned resources based on the metrics provided
+2. Calculate current monthly spend and potential savings using the Cost Explorer data and resource details
 3. Classify each recommendation by priority (critical/medium/low) and effort (low/medium/high)
-4. Include specific resource IDs and names in your findings
+4. Use the actual resource IDs and names from the data above
 
-Provide your analysis service by service. For each service, return a structured JSON block:
+For each service that has resources, return a structured JSON block:
 \`\`\`json
 {
   "service": "<service_name>",
@@ -83,6 +94,35 @@ Provide your analysis service by service. For each service, return a structured 
   ]
 }
 \`\`\`
+
+If a service has resources but no optimization issues, still return a block with an empty recommendations array and the correct resources_analyzed count.
+
+## Service-Specific Metadata Fields
+
+The "metadata" object MUST include service-specific fields when available:
+
+- **EC2**: \`{"currentType": "t3.large", "recommendedType": "t3.medium", "avgCpu": 12.5}\`
+  - \`currentType\`: Current instance type (e.g., "m5.xlarge")
+  - \`recommendedType\`: Suggested instance type for right-sizing (if applicable)
+  - \`avgCpu\`: Average CPU utilization percentage from the provided metrics
+
+- **RDS**: \`{"status": "idle", "connections": 0}\`
+  - \`status\`: Instance status derived from metrics (e.g., "idle", "underutilized")
+  - \`connections\`: Average database connections from the provided metrics
+
+- **S3**: \`{"currentClass": "STANDARD", "recommendedClass": "INTELLIGENT_TIERING", "accessPattern": "infrequent"}\`
+  - \`currentClass\`: Current storage class
+  - \`recommendedClass\`: Recommended storage class
+  - \`accessPattern\`: Access pattern (e.g., "frequent", "infrequent", "archive")
+
+- **Lambda**: \`{"currentMemory": 512, "recommendedMemory": 256, "avgDuration": 150}\`
+  - \`currentMemory\`: Current memory allocation in MB
+  - \`recommendedMemory\`: Recommended memory in MB
+  - \`avgDuration\`: Average invocation duration from the provided metrics
+
+- **NAT Gateway / CloudWatch / other services**: Include any relevant metrics as key-value pairs.
+
+Always populate metadata fields from the provided data. Do NOT leave metadata as an empty object if you have data available.
 
 Analyze services one at a time. Do NOT skip any requested service.`;
 }
@@ -122,7 +162,7 @@ export function buildDeepDiveChatPrompt(context: {
 ${JSON.stringify(context.recommendations, null, 2)}
 
 ## Instructions
-Help the user understand the recommendations, answer questions about specific resources, suggest implementation steps, and provide additional analysis if requested. You have access to the customer's AWS account via CFM MCP tools — use them to look up additional details when the user asks.`;
+Help the user understand the recommendations, answer questions about specific resources, suggest implementation steps, and provide additional analysis if requested. Use your CPN MCP tools (pricing lookups, CFM tips, cost explorer data) to provide detailed answers. Base your analysis on the findings data provided above.`;
 }
 
 // ─── Result Parser ───────────────────────────────────────────────────────────
@@ -143,39 +183,93 @@ interface AgentServiceResult {
   }>;
 }
 
+/** Validate and normalize a single service result object */
+function parseServiceResult(parsed: unknown): AgentServiceResult | null {
+  if (!parsed || typeof parsed !== "object") return null;
+  const obj = parsed as Record<string, unknown>;
+  if (typeof obj.service !== "string" || !Array.isArray(obj.recommendations)) return null;
+
+  return {
+    service: obj.service,
+    resources_analyzed: typeof obj.resources_analyzed === "number" ? obj.resources_analyzed : 0,
+    recommendations: obj.recommendations.map((r: Record<string, unknown>) => ({
+      resourceId: String(r.resourceId ?? "unknown"),
+      resourceName: r.resourceName != null ? String(r.resourceName) : undefined,
+      priority: normalizePriority(String(r.priority ?? "low")),
+      recommendation: String(r.recommendation ?? ""),
+      currentCost: Number(r.currentCost) || 0,
+      estimatedSavings: Number(r.estimatedSavings) || 0,
+      effort: normalizeEffort(String(r.effort ?? "medium")),
+      metadata: (r.metadata && typeof r.metadata === "object") ? r.metadata as Record<string, unknown> : {},
+    })),
+  };
+}
+
 /**
  * Extract structured service result blocks from the agent's text response.
- * The agent returns markdown with fenced JSON blocks — one per service.
+ * Supports multiple response formats:
+ *   1. Markdown with fenced JSON blocks (```json ... ```)
+ *   2. Raw JSON array of service objects
+ *   3. Raw JSON single service object
  * Gracefully handles malformed blocks by skipping them.
  */
 export function parseScanResults(agentResponse: string): AgentServiceResult[] {
   const results: AgentServiceResult[] = [];
 
-  // Match fenced JSON code blocks (```json ... ``` or ``` ... ```)
+  // Strategy 1: Match fenced JSON code blocks (```json ... ``` or ``` ... ```)
   const jsonBlockRegex = /```(?:json)?\s*\n([\s\S]*?)```/g;
   let match: RegExpExecArray | null;
 
   while ((match = jsonBlockRegex.exec(agentResponse)) !== null) {
     try {
       const parsed = JSON.parse(match[1].trim());
-      if (parsed && typeof parsed.service === "string" && Array.isArray(parsed.recommendations)) {
-        results.push({
-          service: parsed.service,
-          resources_analyzed: typeof parsed.resources_analyzed === "number" ? parsed.resources_analyzed : 0,
-          recommendations: parsed.recommendations.map((r: Record<string, unknown>) => ({
-            resourceId: String(r.resourceId ?? "unknown"),
-            resourceName: r.resourceName != null ? String(r.resourceName) : undefined,
-            priority: normalizePriority(String(r.priority ?? "low")),
-            recommendation: String(r.recommendation ?? ""),
-            currentCost: Number(r.currentCost) || 0,
-            estimatedSavings: Number(r.estimatedSavings) || 0,
-            effort: normalizeEffort(String(r.effort ?? "medium")),
-            metadata: (r.metadata && typeof r.metadata === "object") ? r.metadata as Record<string, unknown> : {},
-          })),
-        });
+      // Could be a single object or an array inside a fenced block
+      if (Array.isArray(parsed)) {
+        for (const item of parsed) {
+          const result = parseServiceResult(item);
+          if (result) results.push(result);
+        }
+      } else {
+        const result = parseServiceResult(parsed);
+        if (result) results.push(result);
       }
     } catch {
       // Skip malformed JSON blocks
+    }
+  }
+
+  // Strategy 2: If no fenced blocks found, try parsing the entire response as JSON
+  if (results.length === 0) {
+    const trimmed = agentResponse.trim();
+    // Look for JSON starting with [ or { anywhere in the response
+    const jsonStart = trimmed.search(/[\[{]/);
+    if (jsonStart >= 0) {
+      const jsonCandidate = trimmed.slice(jsonStart);
+      try {
+        const parsed = JSON.parse(jsonCandidate);
+        if (Array.isArray(parsed)) {
+          for (const item of parsed) {
+            const result = parseServiceResult(item);
+            if (result) results.push(result);
+          }
+        } else {
+          const result = parseServiceResult(parsed);
+          if (result) results.push(result);
+        }
+      } catch {
+        // Strategy 3: Try to find individual JSON objects in the text
+        // Match top-level { ... } blocks that look like service results
+        const objectRegex = /\{[^{}]*"service"\s*:\s*"[^"]+?"[^{}]*"recommendations"\s*:\s*\[[\s\S]*?\]\s*\}/g;
+        let objMatch: RegExpExecArray | null;
+        while ((objMatch = objectRegex.exec(agentResponse)) !== null) {
+          try {
+            const result = parseServiceResult(JSON.parse(objMatch[0]));
+            if (result) results.push(result);
+          } catch {
+            // Skip malformed objects
+          }
+        }
+      }
     }
   }
 
@@ -368,12 +462,35 @@ export async function runScan(
 
   try {
     // 1. Assume the cross-account IAM role (credentials are scoped to this function)
-    await assumeRole(account.roleArn, account.externalId);
+    const stsCreds = await assumeRole(account.roleArn, account.externalId);
 
     // 2. Transition: pending → running
     await updateScanStatus(scanId, "running");
 
-    // 3. Create a new Azure conversation for this scan
+    // 3. Pre-fetch AWS resource data using assumed role credentials
+    // Emit service_started events to show collection phase
+    for (const service of account.services) {
+      onProgress?.({ type: "service_started", service });
+    }
+
+    const collectedData = await collectAccountData(
+      stsCreds,
+      account.regions as string[],
+      account.services as string[],
+      (service, status) => {
+        console.log(`[CFM Scan ${scanId}] Collecting ${service}: ${status}`);
+        onProgress?.({ type: "service_collecting", service, detail: status });
+      },
+    );
+    const formattedData = formatCollectedData(collectedData);
+
+    // Notify that data collection is done, agent analysis begins
+    const totalResources = collectedData.services.reduce(
+      (sum, s) => sum + s.resources.length, 0,
+    );
+    onProgress?.({ type: "data_collected", resourceCount: totalResources });
+
+    // 4. Create a new Azure conversation for this scan
     const conversationId = await createConversation();
 
     // Update scan with conversation ID for future deep-dive chat continuity
@@ -382,22 +499,25 @@ export async function runScan(
       .set({ azureConversationId: conversationId })
       .where(eq(cfmScans.id, scanId));
 
-    // 4. Build and send the analysis prompt
-    const prompt = buildScanPrompt(account);
+    // 5. Build and send the analysis prompt (with pre-collected data)
+    const prompt = buildScanPrompt(account, formattedData);
 
-    // Emit service_started events for all services
-    for (const service of account.services) {
-      onProgress?.({ type: "service_started", service });
-    }
-
-    // 5. Call the agent (non-streaming — we need the full response to parse JSON blocks)
+    // 6. Call the agent (non-streaming — we need the full response to parse JSON blocks)
     const agentResponse = await callAgentForScan(conversationId, prompt);
 
-    // 6. Parse structured results from the agent response
+    // 7. Parse structured results from the agent response
     const serviceResults = parseScanResults(agentResponse);
     const parsedServiceNames = new Set(serviceResults.map((r) => r.service));
 
-    // 7. Persist recommendations per service and emit progress
+    // Diagnostic: warn if agent responded but no JSON blocks were parsed
+    if (serviceResults.length === 0 && agentResponse.length > 0) {
+      console.warn(
+        `[CFM Scan ${scanId}] Agent returned ${agentResponse.length} chars but 0 parseable service blocks. ` +
+        `First 500 chars: ${agentResponse.slice(0, 500)}`,
+      );
+    }
+
+    // 8. Persist recommendations per service and emit progress
     for (const result of serviceResults) {
       try {
         if (result.recommendations.length > 0) {
@@ -434,7 +554,7 @@ export async function runScan(
       }
     }
 
-    // 8. Mark services that the agent didn't return results for as failed
+    // 9. Mark services that the agent didn't return results for as failed
     for (const service of account.services) {
       if (!parsedServiceNames.has(service) && !failedServices.includes(service)) {
         failedServices.push(service);
@@ -446,7 +566,7 @@ export async function runScan(
       }
     }
 
-    // 9. Build summary and complete the scan
+    // 10. Build summary and complete the scan
     const summary = buildSummary(serviceResults);
 
     await updateScanStatus(scanId, "completed", summary);
@@ -456,6 +576,29 @@ export async function runScan(
       .update(cfmAccounts)
       .set({ lastScanAt: new Date(), updatedAt: new Date() })
       .where(eq(cfmAccounts.id, account.id));
+
+    // 11. Sync recommendation lifecycle tracking
+    const allRecs = serviceResults.flatMap((r) =>
+      r.recommendations.map((rec) => ({
+        resourceId: rec.resourceId,
+        service: r.service,
+      })),
+    );
+    await syncTrackingAfterScan(account.id, scanId, allRecs).catch(() => {
+      // Non-blocking: lifecycle sync failure should not fail the scan
+    });
+
+    // 12. Auto-verify implemented recommendations no longer flagged
+    const currentResourceKeys = new Set(
+      allRecs.map((r) => `${r.resourceId}::${r.service}`),
+    );
+    await autoVerifyImplementedRecommendations(
+      account.id,
+      scanId,
+      currentResourceKeys,
+    ).catch(() => {
+      // Non-blocking: auto-verification failure should not fail the scan
+    });
 
     onProgress?.({ type: "scan_complete", summary });
   } catch (err) {

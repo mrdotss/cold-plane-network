@@ -144,6 +144,14 @@ export function StudioClient() {
     [pipeline]
   );
 
+  // Derive scrollToLine from selected node's meta
+  const scrollToLine = useMemo(() => {
+    if (!pipeline.selectedNodeId) return undefined;
+    const node = pipeline.flowNodes.find((n) => n.id === pipeline.selectedNodeId);
+    const lineStart = (node?.data as { meta?: { lineStart?: number } })?.meta?.lineStart;
+    return typeof lineStart === "number" ? lineStart : undefined;
+  }, [pipeline.selectedNodeId, pipeline.flowNodes]);
+
   // Count and filter inferred edges (must be before early return to preserve hook order)
   const inferredEdgeCount = useMemo(
     () =>
@@ -192,6 +200,7 @@ export function StudioClient() {
         <EditorTabs
           specText={pipeline.specText}
           onSpecChange={pipeline.setSpecText}
+          scrollToLine={scrollToLine}
         />
       }
       topologyPreview={
@@ -203,6 +212,9 @@ export function StudioClient() {
                 edges={visibleEdges}
                 selectedNodeId={pipeline.selectedNodeId}
                 onNodeSelect={handleNodeSelect}
+                onNodesChange={pipeline.handleNodesChange}
+                onConnect={pipeline.handleConnect}
+                onConnectStart={pipeline.handleConnectStart}
               />
             </ReactFlowProvider>
           </div>

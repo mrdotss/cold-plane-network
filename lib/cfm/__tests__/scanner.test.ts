@@ -113,7 +113,7 @@ describe("Property 4: Scan prompt does not reference specific MCP tools", () => 
         arbRegions,
         arbServices,
         (awsAccountId, regions, services) => {
-          const prompt = buildScanPrompt({ awsAccountId, regions, services });
+          const prompt = buildScanPrompt({ awsAccountId, regions, services }, "### Test Data\nNo resources.");
           const promptLower = prompt.toLowerCase();
 
           for (const toolName of CFM_MCP_TOOL_NAMES) {
@@ -132,7 +132,7 @@ describe("Property 4: Scan prompt does not reference specific MCP tools", () => 
         arbRegions,
         arbServices,
         (awsAccountId, regions, services) => {
-          const prompt = buildScanPrompt({ awsAccountId, regions, services });
+          const prompt = buildScanPrompt({ awsAccountId, regions, services }, "### Test Data\nNo resources.");
 
           // Account ID is present
           expect(prompt).toContain(awsAccountId);

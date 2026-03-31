@@ -115,6 +115,44 @@ function normalizeStringArray(value: unknown): string[] {
 }
 
 /**
+ * Scan raw YAML text to find line ranges for each `- name: <value>` resource block.
+ * Returns a map from resource name to { start, end } (1-based, inclusive).
+ */
+export function findResourceLineRanges(
+  rawYaml: string
+): Map<string, { start: number; end: number }> {
+  const lines = rawYaml.split("\n");
+  const ranges = new Map<string, { start: number; end: number }>();
+
+  let currentName: string | null = null;
+  let currentStart = 0;
+  let currentIndent = -1;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.trim() === "") continue;
+
+    const match = line.match(/^(\s*)- name:\s*(.+)$/);
+    if (match) {
+      // Close previous block
+      if (currentName !== null) {
+        ranges.set(currentName, { start: currentStart, end: i }); // end = line before this one (1-based)
+      }
+      currentName = match[2].trim();
+      currentStart = i + 1; // 1-based
+      currentIndent = match[1].length;
+    }
+  }
+
+  // Close last block
+  if (currentName !== null) {
+    ranges.set(currentName, { start: currentStart, end: lines.length });
+  }
+
+  return ranges;
+}
+
+/**
  * Parse raw spec text (YAML format) into a ParsedSpec.
  * Never throws — all errors are captured as diagnostics.
  */
@@ -174,6 +212,16 @@ export function parseSpec(rawText: string): ParsedSpec {
     undefined,
     diagnostics
   );
+
+  // Merge line ranges into resources
+  const lineRanges = findResourceLineRanges(rawText);
+  for (const resource of resources) {
+    const range = lineRanges.get(resource.name);
+    if (range) {
+      resource.lineStart = range.start;
+      resource.lineEnd = range.end;
+    }
+  }
 
   return { resources, errors: diagnostics };
 }

@@ -35,9 +35,12 @@ interface ScanProgressProps {
 
 export function ScanProgress({ scanId, accountId, services }: ScanProgressProps) {
   const router = useRouter();
+  // Initialize as in_progress — collection starts immediately after scan creation,
+  // so service_started events may fire before SSE stream connects
   const [serviceStates, setServiceStates] = useState<ServiceState[]>(() =>
-    services.map((service) => ({ service, status: "pending" })),
+    services.map((service) => ({ service, status: "in_progress", summary: "Collecting data…" })),
   );
+  const [phase, setPhase] = useState<"collecting" | "analyzing" | "done">("collecting");
   const [scanDone, setScanDone] = useState(false);
   const [scanFailed, setScanFailed] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -46,7 +49,13 @@ export function ScanProgress({ scanId, accountId, services }: ScanProgressProps)
   const completedCount = serviceStates.filter(
     (s) => s.status === "done" || s.status === "failed",
   ).length;
-  const progressPercent = services.length > 0 ? Math.round((completedCount / services.length) * 100) : 0;
+
+  // Two-phase progress: collection (0-50%, indeterminate pulse) + analysis (50-100%, per-service)
+  const progressPercent = phase === "collecting"
+    ? 25 // Indeterminate — collection is fast, just show partial
+    : services.length > 0
+      ? 50 + Math.round((completedCount / services.length) * 50)
+      : 50;
 
   // Handle an incoming SSE event
   const handleEvent = useCallback((event: ScanProgressEvent) => {
@@ -54,7 +63,25 @@ export function ScanProgress({ scanId, accountId, services }: ScanProgressProps)
       case "service_started":
         setServiceStates((prev) =>
           prev.map((s) =>
-            s.service === event.service ? { ...s, status: "in_progress" } : s,
+            s.service === event.service ? { ...s, status: "in_progress", summary: "Collecting data…" } : s,
+          ),
+        );
+        break;
+      case "service_collecting":
+        setServiceStates((prev) =>
+          prev.map((s) =>
+            s.service === event.service ? { ...s, status: "in_progress", summary: `Collecting ${event.detail}` } : s,
+          ),
+        );
+        break;
+      case "data_collected":
+        setPhase("analyzing");
+        // Reset all services to "in_progress" for analysis phase
+        setServiceStates((prev) =>
+          prev.map((s) =>
+            s.status === "failed"
+              ? s
+              : { ...s, status: "in_progress", summary: "Waiting for analysis…" },
           ),
         );
         break;
@@ -82,6 +109,7 @@ export function ScanProgress({ scanId, accountId, services }: ScanProgressProps)
         );
         break;
       case "scan_complete":
+        setPhase("done");
         setScanDone(true);
         break;
       case "scan_failed":
@@ -195,7 +223,9 @@ export function ScanProgress({ scanId, accountId, services }: ScanProgressProps)
                   ? "Scan complete"
                   : scanFailed
                     ? "Scan failed"
-                    : `Analyzing services…`}
+                    : phase === "collecting"
+                      ? "Collecting AWS data…"
+                      : "Analyzing with AI agent…"}
               </span>
               <span>
                 {completedCount} / {services.length}
