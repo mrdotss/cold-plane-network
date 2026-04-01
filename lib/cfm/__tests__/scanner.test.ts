@@ -3,7 +3,7 @@ import * as fc from "fast-check";
 
 // Mock server-only and external dependencies
 vi.mock("server-only", () => ({}));
-vi.mock("@/lib/cfm/aws-connection", () => ({
+vi.mock("@/lib/aws/connection", () => ({
   assumeRole: vi.fn().mockResolvedValue({}),
 }));
 vi.mock("@/lib/cfm/queries", () => ({
@@ -21,6 +21,7 @@ vi.mock("@/lib/db/client", () => ({
 }));
 vi.mock("@/lib/db/schema", () => ({
   cfmScans: { id: "id" },
+  awsAccounts: { id: "id" },
   cfmAccounts: { id: "id" },
 }));
 vi.mock("drizzle-orm", () => ({

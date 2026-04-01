@@ -40,6 +40,7 @@ export interface CfmScanSummary {
     low: number;
   };
   serviceBreakdown: CfmServiceBreakdown[];
+  tagBreakdown?: Record<string, Record<string, number>>;
 }
 
 export interface CfmServiceBreakdown {

@@ -37,6 +37,7 @@ import {
 
 export interface CollectedAccountData {
   costByService: Record<string, number>;
+  costByTag: Record<string, Record<string, number>>;
   services: CollectedServiceData[];
 }
 
@@ -159,6 +160,54 @@ async function collectCostData(
     console.warn("[CFM Collector] Cost Explorer failed:", (err as Error).message);
     return {};
   }
+}
+
+// ─── Tag-Based Cost Explorer ────────────────────────────────────────────────
+
+async function collectCostByTag(
+  credentials: ReturnType<typeof makeCredentials>,
+  tagKeys: string[],
+): Promise<Record<string, Record<string, number>>> {
+  if (tagKeys.length === 0) return {};
+
+  const client = new CostExplorerClient({
+    region: "us-east-1",
+    credentials,
+  });
+
+  const endDate = new Date();
+  const startDate = new Date(endDate.getTime() - 30 * 86400000);
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+
+  const result: Record<string, Record<string, number>> = {};
+
+  for (const tagKey of tagKeys) {
+    try {
+      const response = await client.send(
+        new GetCostAndUsageCommand({
+          TimePeriod: { Start: fmt(startDate), End: fmt(endDate) },
+          Granularity: "MONTHLY",
+          Metrics: ["BlendedCost"],
+          GroupBy: [{ Type: "TAG", Key: tagKey }],
+        }),
+      );
+
+      const tagCosts: Record<string, number> = {};
+      for (const group of response.ResultsByTime?.[0]?.Groups ?? []) {
+        const tagValue = group.Keys?.[0]?.replace(`${tagKey}$`, "") ?? "untagged";
+        const amount = Number(group.Metrics?.BlendedCost?.Amount ?? 0);
+        if (amount > 0.01) {
+          tagCosts[tagValue || "untagged"] = Math.round(amount * 100) / 100;
+        }
+      }
+      result[tagKey] = tagCosts;
+    } catch (err) {
+      console.warn(`[CFM Collector] Cost by tag "${tagKey}" failed:`, (err as Error).message);
+      result[tagKey] = {};
+    }
+  }
+
+  return result;
 }
 
 // ─── EC2 Collector ──────────────────────────────────────────────────────────
@@ -513,12 +562,16 @@ export async function collectAccountData(
   regions: string[],
   services: string[],
   onProgress?: (service: string, status: string) => void,
+  costAllocationTags?: string[],
 ): Promise<CollectedAccountData> {
   const credentials = makeCredentials(stsCreds);
 
   // 1. Cost Explorer data (always from us-east-1, not region-specific)
   onProgress?.("Cost Explorer", "collecting");
-  const costByService = await collectCostData(credentials);
+  const [costByService, costByTag] = await Promise.all([
+    collectCostData(credentials),
+    collectCostByTag(credentials, costAllocationTags ?? []),
+  ]);
   onProgress?.("Cost Explorer", "done");
 
   // 2. S3 is global (not per-region) — collect once
@@ -572,7 +625,7 @@ export async function collectAccountData(
     });
   }
 
-  return { costByService, services: serviceDataResults };
+  return { costByService, costByTag, services: serviceDataResults };
 }
 
 /**
@@ -599,6 +652,21 @@ export function formatCollectedData(data: CollectedAccountData): string {
       "### Monthly Cost by Service",
       "Cost Explorer data unavailable (insufficient permissions or no spend in period).",
     );
+  }
+
+  // Tag-based cost breakdown
+  if (Object.keys(data.costByTag).length > 0) {
+    sections.push("### Cost by Tag");
+    for (const [tagKey, tagValues] of Object.entries(data.costByTag)) {
+      if (Object.keys(tagValues).length > 0) {
+        sections.push(
+          `**${tagKey}**:`,
+          "```json",
+          JSON.stringify(tagValues, null, 2),
+          "```",
+        );
+      }
+    }
   }
 
   // Resource data per service

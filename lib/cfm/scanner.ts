@@ -1,6 +1,6 @@
 import "server-only";
 
-import { assumeRole } from "./aws-connection";
+import { assumeRole } from "@/lib/aws/connection";
 import {
   collectAccountData,
   formatCollectedData,
@@ -14,7 +14,7 @@ import {
 import { createConversation } from "@/lib/chat/agent-client";
 import { getBearerToken } from "@/lib/sizing/agent-client";
 import { db } from "@/lib/db/client";
-import { cfmScans, cfmAccounts } from "@/lib/db/schema";
+import { cfmScans, awsAccounts } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import type {
   CfmAccount,
@@ -481,6 +481,7 @@ export async function runScan(
         console.log(`[CFM Scan ${scanId}] Collecting ${service}: ${status}`);
         onProgress?.({ type: "service_collecting", service, detail: status });
       },
+      (account as { costAllocationTags?: string[] }).costAllocationTags,
     );
     const formattedData = formatCollectedData(collectedData);
 
@@ -569,13 +570,18 @@ export async function runScan(
     // 10. Build summary and complete the scan
     const summary = buildSummary(serviceResults);
 
+    // Attach tag breakdown if cost allocation tags were collected
+    if (Object.keys(collectedData.costByTag).length > 0) {
+      summary.tagBreakdown = collectedData.costByTag;
+    }
+
     await updateScanStatus(scanId, "completed", summary);
 
     // Update account's lastScanAt
     await db
-      .update(cfmAccounts)
+      .update(awsAccounts)
       .set({ lastScanAt: new Date(), updatedAt: new Date() })
-      .where(eq(cfmAccounts.id, account.id));
+      .where(eq(awsAccounts.id, account.id));
 
     // 11. Sync recommendation lifecycle tracking
     const allRecs = serviceResults.flatMap((r) =>

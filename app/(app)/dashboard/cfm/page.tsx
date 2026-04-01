@@ -11,6 +11,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { CfmLanding } from "@/components/cfm/CfmLanding";
 import type { SerializedAccountWithScan } from "@/components/cfm/CfmLanding";
 import { getAccountsByUser, getLatestScanForAccount } from "@/lib/cfm/queries";
+import { getGroupsByUser } from "@/lib/cfm/group-queries";
 import { requireAuth } from "@/lib/auth/middleware";
 import { redirect } from "next/navigation";
 import type { CfmScanSummary } from "@/lib/cfm/types";
@@ -24,12 +25,16 @@ export default async function CfmPage() {
     redirect("/login");
   }
 
-  const accounts = await getAccountsByUser(userId);
+  const [accounts, groups] = await Promise.all([
+    getAccountsByUser(userId),
+    getGroupsByUser(userId),
+  ]);
 
   // Serialize Date objects to ISO strings for the client component boundary
   const accountsWithScans: SerializedAccountWithScan[] = await Promise.all(
     accounts.map(async (account) => {
       const latestScan = await getLatestScanForAccount(account.id);
+      const scanSummary = (latestScan?.summary as CfmScanSummary | null) ?? null;
       return {
         account: {
           id: account.id,
@@ -40,14 +45,23 @@ export default async function CfmPage() {
           externalId: account.externalId,
           regions: account.regions as string[],
           services: account.services as string[],
+          groupId: (account.groupId as string | null) ?? null,
           lastScanAt: account.lastScanAt?.toISOString() ?? null,
           createdAt: account.createdAt.toISOString(),
           updatedAt: account.updatedAt.toISOString(),
         },
-        totalSavings: (latestScan?.summary as CfmScanSummary | null)?.totalPotentialSavings ?? 0,
+        totalSavings: scanSummary?.totalPotentialSavings ?? 0,
+        scanSummary,
       };
     })
   );
+
+  const serializedGroups = groups.map((g) => ({
+    id: g.id,
+    name: g.name,
+    description: g.description,
+    color: g.color,
+  }));
 
   return (
     <>
@@ -72,7 +86,10 @@ export default async function CfmPage() {
         </div>
       </header>
       <div className="min-w-[1280px]">
-        <CfmLanding initialAccounts={accountsWithScans} />
+        <CfmLanding
+          initialAccounts={accountsWithScans}
+          initialGroups={serializedGroups}
+        />
       </div>
     </>
   );

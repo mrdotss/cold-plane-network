@@ -29,6 +29,20 @@
       "when": 1774938286416,
       "tag": "0003_lovely_lorna_dane",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1743465600000,
+      "tag": "0004_shared_aws_accounts",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1775023660248,
+      "tag": "0005_csp_tables",
+      "breakpoints": true
     }
   ]
 }

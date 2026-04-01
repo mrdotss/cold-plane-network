@@ -72,6 +72,11 @@ const aiToolsItems: {
     url: "/dashboard/cfm",
     icon: AiInnovation01Icon,
   },
+  {
+    title: "CSP Analysis",
+    url: "/dashboard/csp",
+    icon: ShieldIcon,
+  },
 ]
 
 const secondaryItems = [

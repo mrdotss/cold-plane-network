@@ -294,7 +294,7 @@ function ServiceRow({ state }: { state: ServiceState }) {
         {state.status === "failed" && (
           <span className="text-destructive">{state.error}</span>
         )}
-        {state.status === "in_progress" && "Analyzing…"}
+        {state.status === "in_progress" && (state.summary || "Analyzing…")}
       </span>
     </div>
   );

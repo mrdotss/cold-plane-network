@@ -6,7 +6,7 @@ import {
   projects,
   sizingReports,
   auditEvents,
-  cfmAccounts,
+  awsAccounts,
   cfmScans,
   cfmRecommendations,
 } from "@/lib/db/schema";
@@ -37,7 +37,7 @@ async function getDashboardData(userId: string) {
     db.select({ projectCount: count() }).from(projects).where(eq(projects.createdById, userId)),
     db.select({ sizingReportCount: count() }).from(sizingReports).where(eq(sizingReports.userId, userId)),
     db.select({ auditEventCount: count() }).from(auditEvents).where(eq(auditEvents.userId, userId)),
-    db.select({ cfmAccountCount: count() }).from(cfmAccounts).where(eq(cfmAccounts.userId, userId)),
+    db.select({ cfmAccountCount: count() }).from(awsAccounts).where(eq(awsAccounts.userId, userId)),
     db.select({ cfmScanCount: count() }).from(cfmScans).where(
       and(eq(cfmScans.userId, userId), eq(cfmScans.status, "completed"))
     ),

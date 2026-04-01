@@ -4,7 +4,7 @@ import * as fc from "fast-check";
 // Mock server-only since schema.ts imports it transitively
 vi.mock("server-only", () => ({}));
 
-import { cfmAccounts, cfmScans, cfmRecommendations } from "@/lib/db/schema";
+import { awsAccounts, cfmAccounts, cfmScans, cfmRecommendations } from "@/lib/db/schema";
 
 /**
  * Property 7: No credential persistence

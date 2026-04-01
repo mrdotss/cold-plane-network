@@ -84,6 +84,62 @@ export const upsertScheduleSchema = z
     },
   );
 
+// ─── Account Groups ─────────────────────────────────────────────────────────
+
+export const createGroupSchema = z.object({
+  name: z.string().min(1).max(100),
+  description: z.string().max(500).optional(),
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/, "Color must be a hex color (e.g. #FF0000)")
+    .optional(),
+});
+
+export const updateGroupSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  description: z.string().max(500).optional(),
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/, "Color must be a hex color (e.g. #FF0000)")
+    .optional(),
+});
+
+export const assignGroupSchema = z.object({
+  groupId: z.string().uuid().nullable(),
+});
+
+// ─── Budgets ────────────────────────────────────────────────────────────────
+
+export const createBudgetSchema = z
+  .object({
+    name: z.string().min(1).max(100),
+    accountId: z.string().uuid().optional(),
+    groupId: z.string().uuid().optional(),
+    monthlyLimit: z.number().positive(),
+    alertThresholdPct: z.number().int().min(1).max(100).default(80),
+    enabled: z.boolean().default(true),
+  })
+  .refine(
+    (data) =>
+      (data.accountId && !data.groupId) || (!data.accountId && data.groupId),
+    { message: "Exactly one of accountId or groupId must be provided" },
+  );
+
+export const updateBudgetSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  monthlyLimit: z.number().positive().optional(),
+  alertThresholdPct: z.number().int().min(1).max(100).optional(),
+  enabled: z.boolean().optional(),
+});
+
+// ─── Cross-Account Comparison ───────────────────────────────────────────────
+
+export const compareAccountsSchema = z.object({
+  accountIds: z.string().transform((val) => val.split(",").filter(Boolean)),
+});
+
+// ─── Type Exports ───────────────────────────────────────────────────────────
+
 export type CreateAccountInput = z.infer<typeof createAccountSchema>;
 export type UpdateAccountInput = z.infer<typeof updateAccountSchema>;
 export type StartScanInput = z.infer<typeof startScanSchema>;
@@ -92,3 +148,7 @@ export type ScanHistoryQueryInput = z.infer<typeof scanHistoryQuerySchema>;
 export type CompareQueryInput = z.infer<typeof compareQuerySchema>;
 export type UpdateTrackingInput = z.infer<typeof updateTrackingSchema>;
 export type UpsertScheduleInput = z.infer<typeof upsertScheduleSchema>;
+export type CreateGroupInput = z.infer<typeof createGroupSchema>;
+export type UpdateGroupInput = z.infer<typeof updateGroupSchema>;
+export type CreateBudgetInput = z.infer<typeof createBudgetSchema>;
+export type UpdateBudgetInput = z.infer<typeof updateBudgetSchema>;

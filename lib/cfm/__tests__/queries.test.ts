@@ -16,7 +16,7 @@ vi.mock("@/lib/db/client", () => ({
 
 // Import after mocks
 import { db } from "@/lib/db/client";
-import { cfmAccounts, cfmScans, cfmRecommendations } from "@/lib/db/schema";
+import { awsAccounts, cfmAccounts, cfmScans, cfmRecommendations } from "@/lib/db/schema";
 import {
   createAccount,
   deleteAccount,

@@ -40,6 +40,16 @@ export const AUDIT_EVENT_TYPES = [
   "CFM_SCAN_SCHEDULED",
   "CFM_RECOMMENDATION_STATUS_CHANGED",
   "CFM_RECOMMENDATION_AUTO_VERIFIED",
+  "CFM_GROUP_CREATED",
+  "CFM_GROUP_UPDATED",
+  "CFM_GROUP_DELETED",
+  "CFM_BUDGET_CREATED",
+  "CFM_BUDGET_UPDATED",
+  "CFM_BUDGET_DELETED",
+  "CSP_SCAN_STARTED",
+  "CSP_SCAN_COMPLETED",
+  "CSP_REPORT_EXPORTED",
+  "CSP_FINDING_STATUS_CHANGED",
 ] as const;
 
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
@@ -84,6 +94,16 @@ export const METADATA_ALLOWLISTS: Record<AuditEventType, readonly string[]> = {
   CFM_SCAN_SCHEDULED: ["scanId", "accountId", "scheduleId"],
   CFM_RECOMMENDATION_STATUS_CHANGED: ["trackingId", "accountId", "resourceId", "fromStatus", "toStatus"],
   CFM_RECOMMENDATION_AUTO_VERIFIED: ["trackingId", "accountId", "resourceId", "scanId"],
+  CFM_GROUP_CREATED: ["groupId", "groupName"],
+  CFM_GROUP_UPDATED: ["groupId", "groupName"],
+  CFM_GROUP_DELETED: ["groupId"],
+  CFM_BUDGET_CREATED: ["budgetId", "targetType", "targetId", "monthlyLimit"],
+  CFM_BUDGET_UPDATED: ["budgetId", "monthlyLimit", "enabled"],
+  CFM_BUDGET_DELETED: ["budgetId"],
+  CSP_SCAN_STARTED: ["scanId", "accountId"],
+  CSP_SCAN_COMPLETED: ["scanId", "findingCount", "criticalCount"],
+  CSP_REPORT_EXPORTED: ["scanId", "format"],
+  CSP_FINDING_STATUS_CHANGED: ["trackingId", "accountId", "resourceId", "fromStatus", "toStatus"],
 } as const;
 
 export interface AuditEventInput {

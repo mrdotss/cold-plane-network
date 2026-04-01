@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAuth, AuthError } from "@/lib/auth/middleware";
-import { testConnection } from "@/lib/cfm/aws-connection";
+import { testConnection } from "@/lib/aws/connection";
 import { roleArnSchema } from "@/lib/cfm/validators";
 import { z } from "zod";
 

@@ -2,7 +2,7 @@ import "server-only";
 
 import { db } from "@/lib/db/client";
 import {
-  cfmAccounts,
+  awsAccounts,
   cfmScans,
   cfmRecommendations,
   cfmRecommendationTracking,
@@ -32,7 +32,7 @@ export async function createAccount(
   },
 ) {
   const [account] = await db
-    .insert(cfmAccounts)
+    .insert(awsAccounts)
     .values({
       userId,
       accountName: data.accountName,
@@ -53,8 +53,8 @@ export async function createAccount(
 export async function getAccountsByUser(userId: string) {
   return db
     .select()
-    .from(cfmAccounts)
-    .where(eq(cfmAccounts.userId, userId));
+    .from(awsAccounts)
+    .where(eq(awsAccounts.userId, userId));
 }
 
 
@@ -64,8 +64,8 @@ export async function getAccountsByUser(userId: string) {
 export async function getAccountById(accountId: string, userId: string) {
   const [account] = await db
     .select()
-    .from(cfmAccounts)
-    .where(and(eq(cfmAccounts.id, accountId), eq(cfmAccounts.userId, userId)))
+    .from(awsAccounts)
+    .where(and(eq(awsAccounts.id, accountId), eq(awsAccounts.userId, userId)))
     .limit(1);
 
   return account ?? null;
@@ -86,9 +86,9 @@ export async function updateAccount(
   },
 ) {
   const [updated] = await db
-    .update(cfmAccounts)
+    .update(awsAccounts)
     .set({ ...data, updatedAt: new Date() })
-    .where(and(eq(cfmAccounts.id, accountId), eq(cfmAccounts.userId, userId)))
+    .where(and(eq(awsAccounts.id, accountId), eq(awsAccounts.userId, userId)))
     .returning();
 
   return updated ?? null;
@@ -99,9 +99,9 @@ export async function updateAccount(
  */
 export async function deleteAccount(accountId: string, userId: string) {
   const [deleted] = await db
-    .delete(cfmAccounts)
-    .where(and(eq(cfmAccounts.id, accountId), eq(cfmAccounts.userId, userId)))
-    .returning({ id: cfmAccounts.id });
+    .delete(awsAccounts)
+    .where(and(eq(awsAccounts.id, accountId), eq(awsAccounts.userId, userId)))
+    .returning({ id: awsAccounts.id });
 
   return deleted ?? null;
 }

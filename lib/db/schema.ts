@@ -217,10 +217,31 @@ export const chatMessages = pgTable(
 );
 
 
-// ─── CFM Accounts ────────────────────────────────────────────────────────────
+// ─── AWS Account Groups ─────────────────────────────────────────────────────
 
-export const cfmAccounts = pgTable(
-  "cfm_accounts",
+export const awsAccountGroups = pgTable(
+  "aws_account_groups",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id),
+    name: varchar("name", { length: 100 }).notNull(),
+    description: text("description"),
+    color: varchar("color", { length: 7 }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_aws_account_groups_user").on(t.userId),
+    uniqueIndex("idx_aws_account_groups_user_name").on(t.userId, t.name),
+  ],
+);
+
+// ─── AWS Accounts (shared by CFM + CSP) ─────────────────────────────────────
+
+export const awsAccounts = pgTable(
+  "aws_accounts",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     userId: uuid("user_id")
@@ -232,13 +253,53 @@ export const cfmAccounts = pgTable(
     externalId: text("external_id"),
     regions: jsonb("regions").notNull().$type<string[]>(),
     services: jsonb("services").notNull().$type<string[]>(),
+    groupId: uuid("group_id").references(() => awsAccountGroups.id, {
+      onDelete: "set null",
+    }),
+    costAllocationTags: jsonb("cost_allocation_tags")
+      .notNull()
+      .default("[]")
+      .$type<string[]>(),
     lastScanAt: timestamp("last_scan_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (t) => [
-    index("idx_cfm_accounts_user").on(t.userId),
-    uniqueIndex("idx_cfm_accounts_user_aws").on(t.userId, t.awsAccountId),
+    index("idx_aws_accounts_user").on(t.userId),
+    uniqueIndex("idx_aws_accounts_user_aws").on(t.userId, t.awsAccountId),
+    index("idx_aws_accounts_group").on(t.groupId),
+  ],
+);
+
+/** @deprecated Use awsAccounts directly. Alias kept for migration compatibility. */
+export const cfmAccounts = awsAccounts;
+
+// ─── AWS Budgets ────────────────────────────────────────────────────────────
+
+export const awsBudgets = pgTable(
+  "aws_budgets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id),
+    accountId: uuid("account_id").references(() => awsAccounts.id, {
+      onDelete: "cascade",
+    }),
+    groupId: uuid("group_id").references(() => awsAccountGroups.id, {
+      onDelete: "cascade",
+    }),
+    name: varchar("name", { length: 100 }).notNull(),
+    monthlyLimit: numeric("monthly_limit", { precision: 12, scale: 2 }).notNull(),
+    alertThresholdPct: integer("alert_threshold_pct").notNull().default(80),
+    enabled: boolean("enabled").notNull().default(true),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_aws_budgets_user").on(t.userId),
+    index("idx_aws_budgets_account").on(t.accountId),
+    index("idx_aws_budgets_group").on(t.groupId),
   ],
 );
 
@@ -250,7 +311,7 @@ export const cfmScans = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     accountId: uuid("account_id")
       .notNull()
-      .references(() => cfmAccounts.id, { onDelete: "cascade" }),
+      .references(() => awsAccounts.id, { onDelete: "cascade" }),
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id),
@@ -307,7 +368,7 @@ export const cfmRecommendationTracking = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     accountId: uuid("account_id")
       .notNull()
-      .references(() => cfmAccounts.id, { onDelete: "cascade" }),
+      .references(() => awsAccounts.id, { onDelete: "cascade" }),
     resourceId: text("resource_id").notNull(),
     service: varchar("service", { length: 50 }).notNull(),
     status: varchar("status", { length: 20 }).notNull().default("open"),
@@ -346,7 +407,7 @@ export const cfmSchedules = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     accountId: uuid("account_id")
       .notNull()
-      .references(() => cfmAccounts.id, { onDelete: "cascade" })
+      .references(() => awsAccounts.id, { onDelete: "cascade" })
       .unique(),
     userId: uuid("user_id")
       .notNull()
@@ -364,5 +425,94 @@ export const cfmSchedules = pgTable(
   (t) => [
     index("idx_cfm_schedules_account").on(t.accountId),
     index("idx_cfm_schedules_next_run").on(t.enabled, t.nextRunAt),
+  ],
+);
+
+// ─── CSP Scans ──────────────────────────────────────────────────────────────
+
+export const cspScans = pgTable(
+  "csp_scans",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => awsAccounts.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id),
+    status: varchar("status", { length: 20 }).notNull().default("pending"),
+    summary: jsonb("summary"),
+    azureConversationId: text("azure_conversation_id"),
+    error: text("error"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    completedAt: timestamp("completed_at"),
+  },
+  (t) => [
+    index("idx_csp_scans_account").on(t.accountId),
+    index("idx_csp_scans_user_created").on(t.userId, t.createdAt),
+    index("idx_csp_scans_account_completed").on(t.accountId, t.completedAt),
+  ],
+);
+
+// ─── CSP Findings ───────────────────────────────────────────────────────────
+
+export const cspFindings = pgTable(
+  "csp_findings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    scanId: uuid("scan_id")
+      .notNull()
+      .references(() => cspScans.id, { onDelete: "cascade" }),
+    category: varchar("category", { length: 30 }).notNull(),
+    service: varchar("service", { length: 50 }).notNull(),
+    resourceId: text("resource_id").notNull(),
+    resourceName: text("resource_name"),
+    severity: varchar("severity", { length: 10 }).notNull(),
+    finding: text("finding").notNull(),
+    remediation: text("remediation").notNull(),
+    cisReference: varchar("cis_reference", { length: 20 }),
+    metadata: jsonb("metadata").notNull().default("{}"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_csp_findings_scan").on(t.scanId),
+    index("idx_csp_findings_scan_category").on(t.scanId, t.category),
+    index("idx_csp_findings_scan_severity").on(t.scanId, t.severity),
+  ],
+);
+
+// ─── CSP Finding Tracking (Lifecycle) ───────────────────────────────────────
+
+export const cspFindingTracking = pgTable(
+  "csp_finding_tracking",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => awsAccounts.id, { onDelete: "cascade" }),
+    resourceId: text("resource_id").notNull(),
+    service: varchar("service", { length: 50 }).notNull(),
+    category: varchar("category", { length: 30 }).notNull(),
+    status: varchar("status", { length: 20 }).notNull().default("open"),
+    firstSeenScanId: uuid("first_seen_scan_id")
+      .notNull()
+      .references(() => cspScans.id, { onDelete: "set null" }),
+    lastSeenScanId: uuid("last_seen_scan_id").references(() => cspScans.id, {
+      onDelete: "set null",
+    }),
+    acknowledgedAt: timestamp("acknowledged_at"),
+    remediatedAt: timestamp("remediated_at"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_csp_tracking_account").on(t.accountId),
+    index("idx_csp_tracking_account_status").on(t.accountId, t.status),
+    uniqueIndex("idx_csp_tracking_account_resource").on(
+      t.accountId,
+      t.resourceId,
+      t.service,
+    ),
   ],
 );

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireAuth, AuthError } from "@/lib/auth/middleware";
-import { testConnection } from "@/lib/cfm/aws-connection";
+import { testConnection } from "@/lib/aws/connection";
 import { db } from "@/lib/db/client";
-import { cfmAccounts } from "@/lib/db/schema";
+import { awsAccounts } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import type { TestConnectionResponse } from "@/lib/cfm/types";
 
@@ -24,8 +24,8 @@ export async function POST(
     // Verify account exists and belongs to the authenticated user
     const [account] = await db
       .select()
-      .from(cfmAccounts)
-      .where(and(eq(cfmAccounts.id, id), eq(cfmAccounts.userId, userId)))
+      .from(awsAccounts)
+      .where(and(eq(awsAccounts.id, id), eq(awsAccounts.userId, userId)))
       .limit(1);
 
     if (!account) {

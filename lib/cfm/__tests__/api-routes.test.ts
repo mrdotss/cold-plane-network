@@ -35,6 +35,9 @@ vi.mock("@/lib/audit/writer", () => ({
 vi.mock("@/lib/cfm/aws-connection", () => ({
   testConnection: vi.fn(),
 }));
+vi.mock("@/lib/aws/connection", () => ({
+  testConnection: vi.fn(),
+}));
 
 // Mock validators — but we still get real schema behavior since Zod doesn't need server-only
 vi.mock("@/lib/cfm/validators", async () => {
@@ -78,6 +81,7 @@ vi.mock("@/lib/db/client", () => ({
 }));
 
 vi.mock("@/lib/db/schema", () => ({
+  awsAccounts: { id: "id", userId: "userId" },
   cfmAccounts: { id: "id", userId: "userId" },
 }));
 
