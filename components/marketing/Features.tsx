@@ -11,6 +11,7 @@ import {
   File01Icon,
   Share03Icon,
   ShieldIcon,
+  SecurityCheckIcon,
   ArrowDataTransferHorizontalIcon,
   AiInnovation01Icon,
   AnalyticsUpIcon,
@@ -66,6 +67,12 @@ const features: Feature[] = [
     description:
       "Connect AWS accounts via IAM roles and scan for cost optimization opportunities across EC2, RDS, S3, Lambda, and more.",
   },
+  {
+    icon: SecurityCheckIcon,
+    title: "CSP Security Analysis",
+    description:
+      "Scan your AWS accounts for security misconfigurations across IAM, networking, S3, CloudTrail, and more with AI-powered remediation guidance.",
+  },
 ];
 
 export function Features() {
@@ -76,10 +83,10 @@ export function Features() {
           Everything You Need for Cloud Operations
         </h2>
         <p className="mx-auto max-w-lg text-sm text-muted-foreground">
-          A unified platform for network design, migration planning, workload sizing, and cloud financial management.
+          A unified platform for network design, migration planning, workload sizing, cloud financial management, and security posture analysis.
         </p>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {features.map((f) => (
           <Card key={f.title} className="transition-shadow hover:shadow-md">
             <CardHeader>

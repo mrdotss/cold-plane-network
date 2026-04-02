@@ -22,6 +22,7 @@ import {
   Home01Icon,
   ComputerTerminalIcon,
   ShieldIcon,
+  SecurityCheckIcon,
   ChartRingIcon,
   SentIcon,
   CommandIcon,
@@ -75,7 +76,7 @@ const aiToolsItems: {
   {
     title: "CSP Analysis",
     url: "/dashboard/csp",
-    icon: ShieldIcon,
+    icon: SecurityCheckIcon,
   },
 ]
 
