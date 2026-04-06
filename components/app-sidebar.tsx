@@ -7,7 +7,6 @@ import Link from "next/link"
 import { NavSecondary } from "@/components/nav-secondary"
 import { NavUser } from "@/components/nav-user"
 import { NotificationBell } from "@/components/notifications/NotificationBell"
-import { ThemeToggle } from "@/components/theme/ThemeToggle"
 import {
   Sidebar,
   SidebarContent,
@@ -169,7 +168,6 @@ export function AppSidebar({ user, ...props }: React.ComponentProps<typeof Sideb
         <NavSecondary items={secondaryItems} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
-        <ThemeToggle />
         <NavUser user={user} />
       </SidebarFooter>
     </Sidebar>

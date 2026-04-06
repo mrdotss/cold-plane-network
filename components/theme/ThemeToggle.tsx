@@ -7,7 +7,7 @@ import { SunIcon, MoonIcon, ComputerIcon } from "@hugeicons/core-free-icons"
 import { Button } from "@/components/ui/button"
 import type { IconSvgElement } from "@hugeicons/react"
 
-const modes = ["system", "light", "dark"] as const
+const modes = ["system", "dark", "light"] as const
 type ThemeMode = (typeof modes)[number]
 
 const icons: Record<ThemeMode, IconSvgElement> = {
@@ -17,9 +17,9 @@ const icons: Record<ThemeMode, IconSvgElement> = {
 }
 
 const labels: Record<ThemeMode, string> = {
-  system: "Switch to light mode",
-  light: "Switch to dark mode",
-  dark: "Switch to system mode",
+  system: "Switch to dark mode",
+  dark: "Switch to light mode",
+  light: "Switch to system mode",
 }
 
 export function ThemeToggle() {

@@ -5,6 +5,7 @@ import { db } from "@/lib/db/client";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { AppSidebar } from "@/components/app-sidebar";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import {
   SidebarInset,
   SidebarProvider,
@@ -43,7 +44,14 @@ export default async function AppLayout({
   return (
     <SidebarProvider>
       <AppSidebar user={userData} />
-      <SidebarInset>{children}</SidebarInset>
+      <SidebarInset>
+        <div className="pointer-events-none fixed right-4 top-0 z-10 flex h-16 items-center">
+          <div className="pointer-events-auto">
+            <ThemeToggle />
+          </div>
+        </div>
+        {children}
+      </SidebarInset>
     </SidebarProvider>
   );
 }
