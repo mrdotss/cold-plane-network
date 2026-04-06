@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ForecastChart } from "@/components/insights/ForecastChart";
+import { CorrelationTable } from "@/components/insights/CorrelationTable";
+import { SavingsTracker } from "@/components/insights/SavingsTracker";
+import { DigestTrigger } from "@/components/notifications/DigestTrigger";
 import {
   Card,
   CardContent,
@@ -44,6 +48,7 @@ interface DashboardData {
     cfmScans: number;
     cfmTotalSavings: number;
   };
+  firstAccountId: string | null;
   recentSizingReports: {
     id: string;
     fileName: string;
@@ -397,6 +402,27 @@ export function DashboardContent({ data }: { data: DashboardData }) {
           </CardContent>
         </Card>
       </div>
+
+      {/* AI Insights Section */}
+      {data.firstAccountId && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <ForecastChart accountId={data.firstAccountId} />
+          <CorrelationTable accountId={data.firstAccountId} />
+        </div>
+      )}
+      {data.firstAccountId && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <SavingsTracker />
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">Weekly Digest</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <DigestTrigger />
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

@@ -384,6 +384,9 @@ export const cfmRecommendationTracking = pgTable(
     verifiedScanId: uuid("verified_scan_id").references(() => cfmScans.id, {
       onDelete: "set null",
     }),
+    expectedSavings: numeric("expected_savings", { precision: 12, scale: 2 }),
+    actualSavings: numeric("actual_savings", { precision: 12, scale: 2 }),
+    verificationStatus: varchar("verification_status", { length: 20 }).default("pending"),
     notes: text("notes"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -481,6 +484,28 @@ export const cspFindings = pgTable(
   ],
 );
 
+// ─── Notifications (Phase 4) ─────────────────────────────────────────────────
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id),
+    type: varchar("type", { length: 30 }).notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    metadata: jsonb("metadata").notNull().default("{}"),
+    readAt: timestamp("read_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_notifications_user_created").on(t.userId, t.createdAt),
+    index("idx_notifications_user_read").on(t.userId, t.readAt),
+  ],
+);
+
 // ─── CSP Finding Tracking (Lifecycle) ───────────────────────────────────────
 
 export const cspFindingTracking = pgTable(
@@ -514,5 +539,29 @@ export const cspFindingTracking = pgTable(
       t.resourceId,
       t.service,
     ),
+  ],
+);
+
+// ─── Digest Schedules (Phase 4) ─────────────────────────────────────────────
+
+export const digestSchedules = pgTable(
+  "digest_schedules",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id)
+      .unique(),
+    cronExpression: varchar("cron_expression", { length: 50 })
+      .notNull()
+      .default("0 8 * * 1"),
+    enabled: boolean("enabled").notNull().default(true),
+    lastRunAt: timestamp("last_run_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_digest_schedules_user").on(t.userId),
+    index("idx_digest_schedules_enabled").on(t.enabled, t.lastRunAt),
   ],
 );

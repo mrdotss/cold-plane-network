@@ -23,6 +23,10 @@
   5. SizingReports (id, userId, fileName, reportType, totals, metadata JSON, createdAt).
   6. Chat conversations (id, userId, title, createdAt, updatedAt).
   7. Chat messages (id, chatId, role, content, attachments JSON, createdAt).
+  8. CFM: cfmAccounts, cfmScans, cfmRecommendations, cfmRecommendationTracking (with actualSavings, verificationStatus, verifiedAt, firstSeenScanId, verifiedScanId).
+  9. CSP: cspScans, cspFindings, cspFindingTracking.
+  10. Notifications: notifications table (id, userId, type, title, body, metadata JSONB ≤1KB, readAt, createdAt) with 6 types.
+  11. Digest schedules: digestSchedules table (userId unique, cronExpression, enabled, lastRunAt).
 - DB MUST NOT store: spec bodies, artifact contents, secrets, large binary blobs.
 - File attachments are stored as temporary files on server filesystem, NOT in DB.
 
@@ -33,7 +37,8 @@
 - Agent referenced by name via `AZURE_EXISTING_AGENT_ID` env var (currently `cpn-agent`).
 - **Conversations API** for chat: creates persistent conversations, sends messages, streams responses.
 - **Responses API** for autofill: stateless one-shot calls (`store: false`) for structured pricing data.
-- Single agent (`cpn-agent`) serves both Sizing Report and Chatbot features with conversation-level prompt differentiation.
+- Single agent (`cpn-agent`) serves Sizing Report, Chatbot, CFM Analysis, CSP remediation, Insights chat, and digest summary features with conversation-level prompt differentiation.
+- Agent has access to MCP postgres tools (9 tools, read-only restricted mode) at `mcp.mrdotss.engineer/postgres` for natural language DB queries.
 - Streaming uses SSE via `responses.createStreaming()` or `responses.create({ stream: true })`.
 - Token caching with 5-minute buffer before expiry.
 - MUST NOT instruct agent to use MCP tools in autofill prompts (avoids 429 rate limiting).
@@ -110,6 +115,14 @@ Editor keystroke
 | Topology rendering | Client-side (React Flow). |
 | Chat AI calls | Server-side Route Handler (`POST /api/chat`). Client uses fetch + SSE. |
 | File uploads | Server-side Route Handler (`POST /api/files/upload`). Stored as temp files. |
+| CFM scan/analysis | Server-side Route Handlers (`/api/cfm/*`). SSE for scan progress. |
+| CSP security scan | Server-side Route Handlers (`/api/csp/*`). SSE for scan progress. |
+| Notifications | Server-side CRUD. Client polls `/api/notifications` every 30s. |
+| Digest generation | Server-side. Triggered manually via POST or automatically via Vercel Cron. |
+| Insights chat | Server-side system prompt injection via `getSystemPromptForMode("insights")`. Agent uses MCP DB tools. |
+| Forecast engine | Server-side linear regression on scan history. Client renders via Recharts. |
+| Correlation engine | Server-side SQL join with resource ID normalization. Client renders CorrelationTable. |
+| Savings verification | Server-side. Triggered automatically after CFM scan completes. |
 
 ## Key Dependencies
 
@@ -127,6 +140,11 @@ Editor keystroke
 | `lz-string` | Share link compression (optional) |
 | `pdf-parse` | PDF text extraction for chat attachments |
 | `zod` | Schema validation |
+| `@aws-sdk/client-*` | 12 AWS SDK clients (STS, EC2, S3, RDS, IAM, CloudTrail, CloudWatch, Config, Access Analyzer, Lambda, ECS, Cost Explorer) |
+| `next-themes` | Dark mode theme provider and toggle (Phase 5) |
+| `recharts` | Charting library for dashboard visualizations (forecast charts, category breakdowns) |
+| `cron-parser` | Cron expression parsing/validation for digest scheduling (`CronExpressionParser`) |
+| `react-markdown` + `remark-gfm` | Markdown rendering for digest notification bodies |
 
 ## Client-Side Storage
 

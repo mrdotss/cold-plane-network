@@ -62,6 +62,13 @@ async function getDashboardData(userId: string) {
 
   const latestReport = recentSizingReports[0];
 
+  // Get first account ID for insights widgets
+  const [firstAccount] = await db
+    .select({ id: awsAccounts.id })
+    .from(awsAccounts)
+    .where(eq(awsAccounts.userId, userId))
+    .limit(1);
+
   return {
     stats: {
       projects: projectCount,
@@ -72,6 +79,7 @@ async function getDashboardData(userId: string) {
       cfmScans: cfmScanCount,
       cfmTotalSavings: Number(cfmSavingsResult[0]?.totalSavings ?? 0),
     },
+    firstAccountId: firstAccount?.id ?? null,
     recentSizingReports: recentSizingReports.map((r) => ({
       id: r.id,
       fileName: r.fileName,

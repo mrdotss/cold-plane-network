@@ -13,9 +13,10 @@ import {
 } from "./queries";
 import { createConversation } from "@/lib/chat/agent-client";
 import { getBearerToken } from "@/lib/sizing/agent-client";
+import { createNotification } from "@/lib/notifications/service";
 import { db } from "@/lib/db/client";
 import { cspScans, awsAccounts } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import type {
   CspCategory,
   CspFindingInput,
@@ -28,6 +29,7 @@ import { CSP_CATEGORIES } from "./types";
 
 interface CspAccount {
   id: string;
+  userId: string;
   awsAccountId: string;
   roleArn: string;
   externalId: string | null;
@@ -286,6 +288,19 @@ function buildCspSummary(findings: CspFindingInput[]): CspScanSummary {
   };
 }
 
+// ─── Security Regression Detection ─────────────────────────────────────────
+
+/**
+ * Determine if a security regression notification should be created.
+ * Returns true if the current score is strictly lower than the previous score.
+ */
+export function shouldCreateRegressionNotification(
+  previousScore: number,
+  currentScore: number,
+): boolean {
+  return currentScore < previousScore;
+}
+
 // ─── Scan Orchestrator ─────────────────────────────────────────────────────
 
 /**
@@ -431,6 +446,61 @@ export async function runCspScan(
     );
 
     onProgress?.({ type: "scan_complete", summary });
+
+    // 10. Fire-and-forget notification for scan completion
+    createNotification(
+      account.userId,
+      "csp_scan_complete",
+      `Security Score: ${summary.securityScore}/100 — ${summary.severityBreakdown.critical} critical, ${summary.severityBreakdown.high} high`,
+      `CSP scan completed for account ${account.awsAccountId}. Found ${summary.totalFindings} findings.`,
+      {
+        scanId,
+        accountId: account.id,
+        securityScore: summary.securityScore,
+        critical: summary.severityBreakdown.critical,
+        high: summary.severityBreakdown.high,
+      },
+    ).catch(() => {});
+
+    // 11. Check for security regression vs previous scan
+    try {
+      const [previousScan] = await db
+        .select({
+          summary: cspScans.summary,
+        })
+        .from(cspScans)
+        .where(
+          and(
+            eq(cspScans.accountId, account.id),
+            eq(cspScans.status, "completed"),
+            sql`${cspScans.id} != ${scanId}`,
+          ),
+        )
+        .orderBy(desc(cspScans.completedAt))
+        .limit(1);
+
+      if (previousScan?.summary) {
+        const prevSummary = previousScan.summary as { securityScore?: number };
+        const previousScore = prevSummary.securityScore ?? 0;
+
+        if (shouldCreateRegressionNotification(previousScore, summary.securityScore)) {
+          createNotification(
+            account.userId,
+            "security_regression",
+            `Security score dropped ${previousScore} → ${summary.securityScore}`,
+            `The security score for account ${account.awsAccountId} decreased from ${previousScore} to ${summary.securityScore}. ${summary.severityBreakdown.critical} new critical findings detected.`,
+            {
+              accountId: account.id,
+              previousScore,
+              currentScore: summary.securityScore,
+              newCritical: summary.severityBreakdown.critical,
+            },
+          ).catch(() => {});
+        }
+      }
+    } catch {
+      // Non-blocking: regression check failure should not fail the scan
+    }
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : "Scan failed";
     await updateCspScanStatus(scanId, "failed", undefined, errorMessage);

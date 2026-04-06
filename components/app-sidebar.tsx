@@ -6,6 +6,7 @@ import Link from "next/link"
 
 import { NavSecondary } from "@/components/nav-secondary"
 import { NavUser } from "@/components/nav-user"
+import { NotificationBell } from "@/components/notifications/NotificationBell"
 import {
   Sidebar,
   SidebarContent,
@@ -105,17 +106,20 @@ export function AppSidebar({ user, ...props }: React.ComponentProps<typeof Sideb
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild>
-              <Link href="/dashboard">
-                <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                  <HugeiconsIcon icon={CommandIcon} strokeWidth={2} className="size-4" />
-                </div>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">Cold Plane Network</span>
-                  <span className="truncate text-xs">Beta version</span>
-                </div>
-              </Link>
-            </SidebarMenuButton>
+            <div className="flex items-center gap-1">
+              <SidebarMenuButton size="lg" asChild className="flex-1">
+                <Link href="/dashboard">
+                  <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
+                    <HugeiconsIcon icon={CommandIcon} strokeWidth={2} className="size-4" />
+                  </div>
+                  <div className="grid flex-1 text-left text-sm leading-tight">
+                    <span className="truncate font-medium">Cold Plane Network</span>
+                    <span className="truncate text-xs">Beta version</span>
+                  </div>
+                </Link>
+              </SidebarMenuButton>
+              <NotificationBell />
+            </div>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>

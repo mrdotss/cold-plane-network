@@ -6,6 +6,8 @@ import {
   streamChatResponse,
 } from "@/lib/chat/agent-client";
 import { buildAttachmentContext } from "@/lib/chat/attachment-context";
+import { getSystemPromptForMode } from "@/lib/chat/insights-prompt";
+import type { ChatMode } from "@/lib/chat/insights-prompt";
 import type { FileRef } from "@/lib/chat/types";
 
 interface ChatRequestBody {
@@ -13,6 +15,7 @@ interface ChatRequestBody {
   message: string;
   attachments?: FileRef[];
   pricingContext?: string;
+  mode?: ChatMode;
 }
 
 
@@ -45,7 +48,7 @@ export async function POST(request: Request) {
 
   try {
     const body = (await request.json()) as ChatRequestBody;
-    const { message, attachments, pricingContext } = body;
+    const { message, attachments, pricingContext, mode } = body;
     let { chatId } = body;
 
     if (!message || typeof message !== "string" || message.trim().length === 0) {
@@ -84,8 +87,15 @@ export async function POST(request: Request) {
     // Save user message to DB
     await saveMessage(chatId, "user", message, attachments);
 
-    // Build system context from pricing data and attachments
+    // Build system context from pricing data, attachments, and chat mode
     const contextParts: string[] = [];
+
+    // Add mode-specific system prompt (e.g., insights mode)
+    const modePrompt = mode ? getSystemPromptForMode(mode) : undefined;
+    if (modePrompt) {
+      contextParts.push(modePrompt);
+    }
+
     if (pricingContext) {
       contextParts.push(pricingContext);
     }

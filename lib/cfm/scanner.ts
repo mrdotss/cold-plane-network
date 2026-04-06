@@ -13,6 +13,8 @@ import {
 } from "./queries";
 import { createConversation } from "@/lib/chat/agent-client";
 import { getBearerToken } from "@/lib/sizing/agent-client";
+import { createNotification } from "@/lib/notifications/service";
+import { verifySavings } from "@/lib/insights/savings-verifier";
 import { db } from "@/lib/db/client";
 import { cfmScans, awsAccounts } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -606,7 +608,26 @@ export async function runScan(
       // Non-blocking: auto-verification failure should not fail the scan
     });
 
+    // 12b. Verify savings for implemented recommendations
+    verifySavings(account.id, scanId, account.userId).catch(() => {
+      // Non-blocking: savings verification failure should not fail the scan
+    });
+
     onProgress?.({ type: "scan_complete", summary });
+
+    // 13. Fire-and-forget notification for scan completion
+    createNotification(
+      account.userId,
+      "cfm_scan_complete",
+      `CFM Scan Complete — $${summary.totalPotentialSavings.toFixed(0)} savings found`,
+      `Scan completed for ${account.accountName}. Found ${summary.recommendationCount} recommendations with $${summary.totalPotentialSavings.toFixed(2)}/mo potential savings.`,
+      {
+        scanId,
+        accountId: account.id,
+        totalSavings: summary.totalPotentialSavings,
+        recommendationCount: summary.recommendationCount,
+      },
+    ).catch(() => {});
   } catch (err) {
     // Fatal failure: STS, agent connection, or unrecoverable error
     const errorMessage = err instanceof Error ? err.message : "Scan failed";

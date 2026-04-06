@@ -52,6 +52,7 @@ export async function POST(request: Request) {
       scan.id,
       {
         id: account.id,
+        userId: account.userId,
         awsAccountId: account.awsAccountId,
         roleArn: account.roleArn,
         externalId: account.externalId,

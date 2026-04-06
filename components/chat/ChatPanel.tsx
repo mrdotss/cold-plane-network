@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { ChatMessages } from "./ChatMessages";
 import { ChatInput } from "./ChatInput";
 import { ChatSidebar } from "./ChatSidebar";
+import { ChatModeSelector } from "./ChatModeSelector";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { InformationCircleIcon, SidebarLeftIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ import type {
   SSEEvent,
 } from "@/lib/chat/types";
 import type { PricingData } from "@/lib/sizing/types";
+import type { ChatMode } from "@/lib/chat/insights-prompt";
 
 interface ChatPanelProps {
   pricingData?: PricingData | null;
@@ -48,6 +50,7 @@ export function ChatPanel({ pricingData, fileName }: ChatPanelProps) {
   const [streamingMessageId, setStreamingMessageId] = useState<string | undefined>();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [chatMode, setChatMode] = useState<ChatMode>("sizing");
   const abortRef = useRef<AbortController | null>(null);
 
   // Load chat list on mount
@@ -90,6 +93,14 @@ export function ChatPanel({ pricingData, fileName }: ChatPanelProps) {
   }, []);
 
   const handleNewChat = useCallback(() => {
+    setActiveChatId(undefined);
+    setMessages([]);
+    setError(null);
+  }, []);
+
+  const handleModeChange = useCallback((newMode: ChatMode) => {
+    setChatMode(newMode);
+    // Start a new conversation when switching modes
     setActiveChatId(undefined);
     setMessages([]);
     setError(null);
@@ -215,6 +226,7 @@ export function ChatPanel({ pricingData, fileName }: ChatPanelProps) {
             message,
             attachments,
             pricingContext,
+            mode: chatMode,
           }),
           signal: controller.signal,
         });
@@ -376,7 +388,8 @@ export function ChatPanel({ pricingData, fileName }: ChatPanelProps) {
           >
             <HugeiconsIcon icon={SidebarLeftIcon} strokeWidth={2} />
           </Button>
-          <span className="text-sm font-medium">
+          <ChatModeSelector mode={chatMode} onModeChange={handleModeChange} />
+          <span className="ml-auto text-sm font-medium">
             {activeChatId
               ? chats.find((c) => c.id === activeChatId)?.title ?? "Chat"
               : "New Chat"}

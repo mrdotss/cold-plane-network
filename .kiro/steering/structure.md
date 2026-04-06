@@ -17,6 +17,7 @@ app/
       studio/page.tsx     # Terraform Studio
       migration/page.tsx  # Migration Advisor
       cfm/page.tsx        # CFM Analysis
+      csp/page.tsx        # CSP Security Analysis
       audit/page.tsx      # Audit log viewer
       settings/page.tsx   # User settings
   login/page.tsx          # Login page
@@ -34,15 +35,36 @@ app/
       [chatId]/route.ts   # GET (chat history), DELETE (remove chat)
     files/
       upload/route.ts     # POST (upload file attachment)
+    cfm/                  # CFM Analysis routes
+      accounts/route.ts   # Account CRUD
+      scan/route.ts       # SSE scan endpoint
+      export/route.ts     # Excel/PDF export
+    csp/                  # CSP Analysis routes
+      scan/route.ts       # SSE security scan endpoint
+      [scanId]/route.ts   # Scan results
+    notifications/        # Notification routes
+      route.ts            # GET (list), PATCH (mark-read/dismiss)
+      digest/
+        route.ts          # POST (trigger manual digest generation)
+        cron/route.ts     # GET (Vercel Cron — evaluates per-user schedules hourly)
+        schedule/route.ts # GET, PUT (user's digest cron schedule)
+    insights/             # Insights API routes
+      forecast/route.ts   # GET (forecast with linear regression)
+      correlations/route.ts # GET (cross-domain correlations)
+      savings-tracker/route.ts # GET (savings verification status)
 components/
   ui/                     # shadcn primitives (button, card, input, etc.)
   sizing/                 # Sizing feature components
   chat/                   # Chat feature components
   audit/                  # Audit log components
   dashboard/              # Dashboard layouts
+  cfm/                    # CFM Analysis components
+  csp/                    # CSP Security Analysis components
   marketing/              # Landing page components
   studio/                 # Terraform Studio components
   migration/              # Migration Advisor components
+  notifications/          # Notification center components
+  insights/               # Insights feature components (forecast, correlation, savings)
 hooks/                    # Custom React hooks
 lib/
   db/                     # Drizzle ORM client + schema
@@ -54,6 +76,10 @@ lib/
   sizing/                 # Sizing feature logic
   chat/                   # Chat feature logic
   export/                 # Export utilities
+  cfm/                    # CFM Analysis logic (aws-connection, scanner, queries, export)
+  csp/                    # CSP Analysis logic (scanner, security-rules, aws-security-collector)
+  notifications/          # Notification CRUD, digest generation, scheduling
+  insights/               # Forecast engine, correlation engine, savings verifier
   utils.ts                # cn() and shared utils
 public/                   # Static assets
 drizzle.config.ts         # Drizzle-kit configuration
@@ -79,6 +105,7 @@ MUST use Next.js Route Groups to separate public marketing pages from authentica
 | `app/(app)/dashboard/studio/page.tsx` | Studio — editor + preview + artifacts |
 | `app/(app)/dashboard/migration/page.tsx` | Migration Advisor |
 | `app/(app)/dashboard/cfm/page.tsx` | CFM Analysis |
+| `app/(app)/dashboard/csp/page.tsx` | CSP Security Analysis |
 | `app/(app)/dashboard/audit/page.tsx` | Audit log viewer |
 | `app/(app)/dashboard/settings/page.tsx` | User settings |
 
@@ -99,6 +126,18 @@ MUST use Next.js Route Groups to separate public marketing pages from authentica
 | `app/api/files/upload/route.ts` | POST | Upload file attachment |
 | `app/api/projects/route.ts` | GET, POST | Migration projects |
 | `app/api/projects/[projectId]/relationships/route.ts` | GET, POST | Azure resource relationships |
+| `app/api/cfm/accounts/route.ts` | GET, POST, DELETE | CFM account CRUD |
+| `app/api/cfm/scan/route.ts` | POST | Start CFM scan (SSE progress) |
+| `app/api/cfm/export/route.ts` | POST | Export CFM report (Excel/PDF) |
+| `app/api/csp/scan/route.ts` | POST | Start CSP scan (SSE progress) |
+| `app/api/csp/[scanId]/route.ts` | GET | Get CSP scan results |
+| `app/api/notifications/route.ts` | GET, PATCH | List / mark-read / dismiss notifications |
+| `app/api/notifications/digest/route.ts` | POST | Trigger manual digest generation |
+| `app/api/notifications/digest/cron/route.ts` | GET | Vercel Cron — evaluates per-user digest schedules hourly |
+| `app/api/notifications/digest/schedule/route.ts` | GET, PUT | Get/update user's digest cron schedule |
+| `app/api/insights/forecast/route.ts` | GET | Linear regression forecast (spend/security/findings) |
+| `app/api/insights/correlations/route.ts` | GET | Cross-domain CFM↔CSP resource correlations |
+| `app/api/insights/savings-tracker/route.ts` | GET | Savings verification status per recommendation |
 
 ## Module Structure
 
@@ -156,6 +195,9 @@ lib/chat/
   agent-client.ts         # Azure AI Foundry chat agent (conversations API)
   queries.ts              # DB queries: createChat, getChat, listChats, saveMessage, deleteChat
   file-handler.ts         # File validation, temp storage, PDF text extraction
+  attachment-context.ts   # Build context strings from file attachments
+  insights-prompt.ts      # System prompt builder for "insights" chat mode (injects MCP DB instructions)
+  format-date.ts          # Date formatting utilities for chat
   types.ts                # Chat type definitions (ChatMessage, ChatConversation, etc.)
   index.ts
 ```
@@ -179,6 +221,7 @@ components/chat/
   ChatMessage.tsx          # Individual message bubble (user/assistant)
   ChatInput.tsx            # Multimodal input (text + file attachments)
   ChatSidebar.tsx          # Chat history list (past conversations)
+  ChatModeSelector.tsx     # Toggle between "general" and "insights" chat modes
   FileAttachment.tsx       # File attachment preview chip
   MarkdownRenderer.tsx     # Render AI markdown responses
 ```
@@ -192,6 +235,43 @@ lib/migration/
   aws-service-icons.tsx     # AWS service name → official AWS icon component mapping
   azure-icons.tsx           # Azure resource type → category-colored hugeicons icon mapping
   __tests__/                # Property-based + unit tests for relationship engine and topology builder
+```
+
+### `lib/notifications/`
+
+```
+lib/notifications/
+  service.ts              # createNotification(), getNotifications(), markAsRead(), unread count queries
+  digest.ts               # generateDigest() — AI agent summarization of CFM/CSP deltas
+  types.ts                # Notification type definitions (6 types, metadata shapes)
+  index.ts                # Re-exports
+```
+
+### `lib/insights/`
+
+```
+lib/insights/
+  forecast.ts             # Linear regression engine — computeLinearRegression(), generateForecast()
+  correlations.ts         # Cross-domain correlation — normalizeResourceId(), findCorrelations()
+  savings-verifier.ts     # Post-scan savings verification — verifySavings(), compare pre/post metrics
+```
+
+### `components/notifications/`
+
+```
+components/notifications/
+  NotificationBell.tsx     # Bell icon with unread badge, Popover trigger (hydration-safe)
+  NotificationCenter.tsx   # Notification list in popover — type icons, relative time, markdown digest expand
+  DigestTrigger.tsx        # Manual digest generation button with loading state
+```
+
+### `components/insights/`
+
+```
+components/insights/
+  ForecastChart.tsx        # Recharts LineChart — historical + dashed forecast, metric/horizon selectors, Ask AI
+  CorrelationTable.tsx     # Cross-domain correlation results table (CFM ↔ CSP matches)
+  SavingsTracker.tsx       # Savings verification status with progress badges
 ```
 
 ### `components/studio/`
@@ -213,15 +293,67 @@ components/audit/
   AuditDetailDrawer.tsx    # Side drawer showing full event metadata
 ```
 
+### `lib/cfm/`
+
+```
+lib/cfm/
+  aws-connection.ts        # STS AssumeRole, test connection
+  aws-collector.ts         # Collect AWS resource data (EC2, RDS, S3, Lambda, etc.)
+  scanner.ts               # CFM scan orchestrator + agent calls
+  queries.ts               # Account/scan/recommendation DB queries
+  export-generator.ts      # Excel + PDF report generation
+  scan-events.ts           # In-memory event bus for SSE progress
+  types.ts                 # CFM type definitions
+  validators.ts            # Zod schemas for CFM
+```
+
+### `lib/csp/`
+
+```
+lib/csp/
+  aws-security-collector.ts  # Collect IAM, SG, S3, CloudTrail, Config, Access Analyzer data
+  security-rules.ts          # 20+ security rules with detailed remediation steps
+  scanner.ts                 # CSP scan orchestrator + exponential decay scoring
+  types.ts                   # CSP type definitions
+```
+
+### `components/cfm/`
+
+```
+components/cfm/
+  CfmDashboard.tsx         # Dashboard with summary cards + service grid
+  CfmLanding.tsx           # Saved accounts list + add account
+  AccountWizard.tsx        # 3-step connection wizard (Sheet)
+  ScanProgress.tsx         # SSE-driven scan progress
+  ServiceDeepDive.tsx      # Per-service recommendations + chat
+  ExportDialog.tsx         # Export format selection
+```
+
+### `components/csp/`
+
+```
+components/csp/
+  CspDashboard.tsx         # Security dashboard with score + findings
+  CspLanding.tsx           # Account list for CSP scanning
+  SecurityScoreCard.tsx    # Radial gauge score visualization
+  FindingsTable.tsx        # Findings grid with Sheet detail panel
+  CategoryBreakdown.tsx    # Category-level severity breakdown
+  TopFindings.tsx          # Top critical/high findings summary
+```
+
 ### `components/marketing/`
 
 ```
 components/marketing/
   Navbar.tsx               # Sticky nav
   Hero.tsx                 # Hero section
-  Features.tsx             # Feature cards grid
+  Features.tsx             # Feature cards grid (8 features)
   HowItWorks.tsx           # 3-step visual flow
   DemoPreview.tsx          # Studio preview placeholder
+  MigrationAdvisor.tsx     # Migration Advisor section
+  Sizing.tsx               # Sizing section
+  CfmAnalysis.tsx          # CFM Analysis section
+  CspAnalysis.tsx          # CSP Analysis section
   CTABanner.tsx            # Call-to-action banner
   Footer.tsx               # Footer
 ```
@@ -235,19 +367,28 @@ components/marketing/
 - `lib/chat/agent-client.ts` — server-only.
 - `lib/chat/queries.ts` — server-only.
 - `lib/chat/file-handler.ts` — server-only.
+- `lib/cfm/*` — server-only (AWS SDK, Drizzle queries).
+- `lib/csp/*` — server-only (AWS SDK, Drizzle queries).
+- `lib/notifications/*` — server-only.
+- `lib/insights/*` — server-only (Drizzle queries, regression computations).
+- `lib/chat/insights-prompt.ts` — server-only (injected into agent calls).
 - `lib/spec/*` — client-side. No server imports.
 - `lib/topology/*` — client-side.
 - `components/studio/*` — client components (`"use client"`).
 - `components/chat/*` — client components (`"use client"`).
 - `components/sizing/*` — client components (`"use client"`).
 - `components/audit/*` — MAY be server components if data is fetched server-side.
+- `components/cfm/*` — client components (`"use client"`).
+- `components/csp/*` — client components (`"use client"`).
+- `components/notifications/*` — client components (`"use client"`).
+- `components/insights/*` — client components (`"use client"`).
 - UI components MUST NEVER import `drizzle-orm` or any `lib/db/*` module.
 
 ## Drizzle Schema Location
 
 ```
 lib/db/
-  schema.ts               # All table definitions (users, sessions, audits, projects, sizing, chat)
+  schema.ts               # All table definitions (users, sessions, audits, projects, sizing, chat, cfm*, csp*, notifications, digestSchedules)
   client.ts               # Drizzle client singleton
   migrations/             # SQL migration files
 drizzle.config.ts         # Config pointing to schema.ts + migrations/

@@ -50,6 +50,8 @@ export const AUDIT_EVENT_TYPES = [
   "CSP_SCAN_COMPLETED",
   "CSP_REPORT_EXPORTED",
   "CSP_FINDING_STATUS_CHANGED",
+  "NOTIFICATION_DISMISSED",
+  "NOTIFICATION_DIGEST_TRIGGERED",
 ] as const;
 
 export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
@@ -104,6 +106,8 @@ export const METADATA_ALLOWLISTS: Record<AuditEventType, readonly string[]> = {
   CSP_SCAN_COMPLETED: ["scanId", "findingCount", "criticalCount"],
   CSP_REPORT_EXPORTED: ["scanId", "format"],
   CSP_FINDING_STATUS_CHANGED: ["trackingId", "accountId", "resourceId", "fromStatus", "toStatus"],
+  NOTIFICATION_DISMISSED: ["notificationId"],
+  NOTIFICATION_DIGEST_TRIGGERED: ["triggerType", "accountCount"],
 } as const;
 
 export interface AuditEventInput {
