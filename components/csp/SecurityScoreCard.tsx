@@ -14,10 +14,10 @@ interface SecurityScoreCardProps {
 }
 
 function getScoreColor(score: number) {
-  if (score >= 80) return { text: "text-green-500", stroke: "#22c55e" };
-  if (score >= 60) return { text: "text-yellow-500", stroke: "#eab308" };
-  if (score >= 40) return { text: "text-orange-500", stroke: "#f97316" };
-  return { text: "text-red-500", stroke: "#ef4444" };
+  if (score >= 80) return { text: "text-green-500", strokeClass: "text-green-500" };
+  if (score >= 60) return { text: "text-yellow-500", strokeClass: "text-yellow-500" };
+  if (score >= 40) return { text: "text-orange-500", strokeClass: "text-orange-500" };
+  return { text: "text-red-500", strokeClass: "text-red-500" };
 }
 
 function getScoreLabel(score: number) {
@@ -32,7 +32,7 @@ export function SecurityScoreCard({
   totalFindings,
   severityBreakdown,
 }: SecurityScoreCardProps) {
-  const { text, stroke } = getScoreColor(score);
+  const { text, strokeClass } = getScoreColor(score);
 
   // SVG gauge: 270-degree arc, gap at bottom
   const radius = 54;
@@ -78,15 +78,16 @@ export function SecurityScoreCard({
                 strokeLinecap="round"
                 className="text-muted/30"
               />
-              {/* Filled arc */}
+              {/* Filled arc — uses currentColor via Tailwind text color class */}
               <path
                 d={bgPath}
                 fill="none"
-                stroke={stroke}
+                stroke="currentColor"
                 strokeWidth={strokeWidth}
                 strokeLinecap="round"
                 strokeDasharray={`${circumference}`}
                 strokeDashoffset={circumference - filledLength}
+                className={strokeClass}
               />
             </svg>
             {/* Score text centered in gauge */}
@@ -104,28 +105,28 @@ export function SecurityScoreCard({
               Open Issues
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-1 h-4 rounded-full bg-red-500" />
+              <div className="w-1 h-4 rounded-full bg-red-500 dark:bg-red-400" />
               <span className="text-sm flex-1">Critical</span>
               <span className="text-sm font-bold">
                 {severityBreakdown.critical}
               </span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-1 h-4 rounded-full bg-orange-500" />
+              <div className="w-1 h-4 rounded-full bg-orange-500 dark:bg-orange-400" />
               <span className="text-sm flex-1">High</span>
               <span className="text-sm font-bold">
                 {severityBreakdown.high}
               </span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-1 h-4 rounded-full bg-yellow-500" />
+              <div className="w-1 h-4 rounded-full bg-yellow-500 dark:bg-yellow-400" />
               <span className="text-sm flex-1">Medium</span>
               <span className="text-sm font-bold">
                 {severityBreakdown.medium}
               </span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-1 h-4 rounded-full bg-blue-500" />
+              <div className="w-1 h-4 rounded-full bg-blue-500 dark:bg-blue-400" />
               <span className="text-sm flex-1">Low</span>
               <span className="text-sm font-bold">
                 {severityBreakdown.low}

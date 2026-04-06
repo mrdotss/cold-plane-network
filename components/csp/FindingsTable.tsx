@@ -29,6 +29,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
 import { CSP_CATEGORIES } from "@/lib/csp/types";
+import { AnnotationPopover } from "@/components/annotations/AnnotationPopover";
 
 export interface EnrichedCspFinding {
   id: string;
@@ -103,13 +104,13 @@ const SEVERITY_CONFIG: Record<
 };
 
 const SERVICE_ICONS: Record<string, { icon: IconSvgElement; color: string }> = {
-  IAM: { icon: UserIcon, color: "text-violet-600" },
-  EC2: { icon: Wifi01Icon, color: "text-blue-600" },
-  VPC: { icon: Wifi01Icon, color: "text-blue-600" },
-  S3: { icon: FolderIcon, color: "text-green-600" },
-  CloudTrail: { icon: CloudIcon, color: "text-cyan-600" },
-  Config: { icon: CloudIcon, color: "text-cyan-600" },
-  AccessAnalyzer: { icon: ShieldIcon, color: "text-orange-600" },
+  IAM: { icon: UserIcon, color: "text-violet-600 dark:text-violet-400" },
+  EC2: { icon: Wifi01Icon, color: "text-blue-600 dark:text-blue-400" },
+  VPC: { icon: Wifi01Icon, color: "text-blue-600 dark:text-blue-400" },
+  S3: { icon: FolderIcon, color: "text-green-600 dark:text-green-400" },
+  CloudTrail: { icon: CloudIcon, color: "text-cyan-600 dark:text-cyan-400" },
+  Config: { icon: CloudIcon, color: "text-cyan-600 dark:text-cyan-400" },
+  AccessAnalyzer: { icon: ShieldIcon, color: "text-orange-600 dark:text-orange-400" },
 };
 
 function statusBadge(status: string | null) {
@@ -241,9 +242,12 @@ function FindingDetailSheet({
               </svg>
             </SheetClose>
           </div>
-          <SheetTitle className="text-base leading-snug pr-6">
-            {finding.finding}
-          </SheetTitle>
+          <div className="flex items-center gap-2">
+            <SheetTitle className="text-base leading-snug pr-6 flex-1">
+              {finding.finding}
+            </SheetTitle>
+            <AnnotationPopover targetType="csp_finding" targetId={finding.id} />
+          </div>
           <SheetDescription className="sr-only">
             Security finding detail
           </SheetDescription>
@@ -401,12 +405,13 @@ export function FindingsTable({ findings, accountId }: FindingsTableProps) {
           ) : (
             <div className="space-y-1">
               {/* Table header */}
-              <div className="grid grid-cols-[20px_1fr_80px_60px_50px] gap-3 text-[10px] font-medium text-muted-foreground uppercase tracking-wider pb-1 px-3 border-b">
+              <div className="grid grid-cols-[20px_1fr_80px_60px_50px_28px] gap-3 text-[10px] font-medium text-muted-foreground uppercase tracking-wider pb-1 px-3 border-b">
                 <span />
                 <span>Finding</span>
                 <span className="text-center">Service</span>
                 <span className="text-center">Status</span>
                 <span className="text-right">CIS</span>
+                <span />
               </div>
 
               {filtered.map((finding) => {
@@ -418,12 +423,20 @@ export function FindingsTable({ findings, accountId }: FindingsTableProps) {
                 };
 
                 return (
-                  <button
+                  <div
                     key={finding.id}
-                    className="w-full border rounded-lg px-3 py-2.5 text-left hover:bg-muted/50 transition-colors"
+                    role="button"
+                    tabIndex={0}
+                    className="w-full border rounded-lg px-3 py-2.5 text-left hover:bg-muted/50 transition-colors cursor-pointer"
                     onClick={() => setSelectedFinding(finding)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setSelectedFinding(finding);
+                      }
+                    }}
                   >
-                    <div className="grid grid-cols-[20px_1fr_80px_60px_50px] gap-3 items-center">
+                    <div className="grid grid-cols-[20px_1fr_80px_60px_50px_28px] gap-3 items-center">
                       {/* Severity icon — compact, inline */}
                       <div className={`${sevConfig.bg} p-0.5 rounded`}>
                         <HugeiconsIcon
@@ -464,8 +477,13 @@ export function FindingsTable({ findings, accountId }: FindingsTableProps) {
                       <div className="text-right text-xs text-muted-foreground">
                         {finding.cisReference ?? "-"}
                       </div>
+
+                      {/* Annotation */}
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <AnnotationPopover targetType="csp_finding" targetId={finding.id} />
+                      </div>
                     </div>
-                  </button>
+                  </div>
                 );
               })}
             </div>

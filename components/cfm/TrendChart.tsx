@@ -108,21 +108,24 @@ export function TrendChart({ data }: TrendChartProps) {
               <XAxis
                 dataKey="date"
                 tickFormatter={formatDate}
-                className="text-xs"
-                tick={{ fontSize: 11 }}
+                tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+                stroke="var(--border)"
               />
               {view === "recommendations" ? (
-                <YAxis className="text-xs" tick={{ fontSize: 11 }} />
+                <YAxis
+                  tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+                  stroke="var(--border)"
+                />
               ) : (
                 <YAxis
                   tickFormatter={(v) => formatCurrency(v)}
-                  className="text-xs"
-                  tick={{ fontSize: 11 }}
+                  tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+                  stroke="var(--border)"
                 />
               )}
               <Tooltip content={<CustomTooltip />} />
               <Legend
-                wrapperStyle={{ fontSize: 12 }}
+                wrapperStyle={{ fontSize: 12, color: "var(--muted-foreground)" }}
                 iconType="circle"
                 iconSize={8}
               />
@@ -133,7 +136,7 @@ export function TrendChart({ data }: TrendChartProps) {
                     type="monotone"
                     dataKey="totalMonthlySpend"
                     name="Monthly Spend"
-                    stroke="hsl(217, 91%, 60%)"
+                    stroke="var(--chart-1)"
                     strokeWidth={2}
                     dot={{ r: 3 }}
                     activeDot={{ r: 5 }}
@@ -142,7 +145,7 @@ export function TrendChart({ data }: TrendChartProps) {
                     type="monotone"
                     dataKey="totalPotentialSavings"
                     name="Potential Savings"
-                    stroke="hsl(142, 71%, 45%)"
+                    stroke="var(--chart-2)"
                     strokeWidth={2}
                     dot={{ r: 3 }}
                     activeDot={{ r: 5 }}
@@ -156,7 +159,7 @@ export function TrendChart({ data }: TrendChartProps) {
                   type="monotone"
                   dataKey="totalPotentialSavings"
                   name="Potential Savings"
-                  stroke="hsl(142, 71%, 45%)"
+                  stroke="var(--chart-2)"
                   strokeWidth={2}
                   dot={{ r: 3 }}
                   activeDot={{ r: 5 }}
@@ -168,7 +171,7 @@ export function TrendChart({ data }: TrendChartProps) {
                   type="monotone"
                   dataKey="recommendationCount"
                   name="Recommendations"
-                  stroke="hsl(262, 83%, 58%)"
+                  stroke="var(--chart-5)"
                   strokeWidth={2}
                   dot={{ r: 3 }}
                   activeDot={{ r: 5 }}

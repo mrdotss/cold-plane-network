@@ -19,14 +19,14 @@ import type { IconSvgElement } from "@hugeicons/react";
 import type { CfmServiceBreakdown } from "@/lib/cfm/types";
 
 const SERVICE_ICONS: Record<string, { icon: IconSvgElement; color: string; bg: string }> = {
-  EC2:          { icon: ComputerIcon,         color: "text-orange-600", bg: "bg-orange-100 dark:bg-orange-950" },
-  RDS:          { icon: DatabaseIcon,         color: "text-blue-600",   bg: "bg-blue-100 dark:bg-blue-950" },
-  S3:           { icon: FolderIcon,           color: "text-green-600",  bg: "bg-green-100 dark:bg-green-950" },
-  Lambda:       { icon: FunctionIcon,         color: "text-amber-600",  bg: "bg-amber-100 dark:bg-amber-950" },
-  CloudWatch:   { icon: DashboardCircleIcon,  color: "text-pink-600",   bg: "bg-pink-100 dark:bg-pink-950" },
-  "NAT Gateway":{ icon: RouterIcon,           color: "text-purple-600", bg: "bg-purple-100 dark:bg-purple-950" },
-  CloudTrail:   { icon: CloudIcon,            color: "text-cyan-600",   bg: "bg-cyan-100 dark:bg-cyan-950" },
-  ECS:          { icon: ComputerIcon,         color: "text-indigo-600", bg: "bg-indigo-100 dark:bg-indigo-950" },
+  EC2:          { icon: ComputerIcon,         color: "text-orange-600 dark:text-orange-400", bg: "bg-orange-100 dark:bg-orange-950" },
+  RDS:          { icon: DatabaseIcon,         color: "text-blue-600 dark:text-blue-400",   bg: "bg-blue-100 dark:bg-blue-950" },
+  S3:           { icon: FolderIcon,           color: "text-green-600 dark:text-green-400",  bg: "bg-green-100 dark:bg-green-950" },
+  Lambda:       { icon: FunctionIcon,         color: "text-amber-600 dark:text-amber-400",  bg: "bg-amber-100 dark:bg-amber-950" },
+  CloudWatch:   { icon: DashboardCircleIcon,  color: "text-pink-600 dark:text-pink-400",   bg: "bg-pink-100 dark:bg-pink-950" },
+  "NAT Gateway":{ icon: RouterIcon,           color: "text-purple-600 dark:text-purple-400", bg: "bg-purple-100 dark:bg-purple-950" },
+  CloudTrail:   { icon: CloudIcon,            color: "text-cyan-600 dark:text-cyan-400",   bg: "bg-cyan-100 dark:bg-cyan-950" },
+  ECS:          { icon: ComputerIcon,         color: "text-indigo-600 dark:text-indigo-400", bg: "bg-indigo-100 dark:bg-indigo-950" },
 };
 
 function getServiceStyle(service: string) {

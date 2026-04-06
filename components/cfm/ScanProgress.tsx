@@ -313,7 +313,7 @@ function StatusIcon({ status }: { status: ServiceStatus }) {
       return (
         <HugeiconsIcon
           icon={Loading03Icon}
-          className="size-4 text-blue-500 animate-spin"
+          className="size-4 text-blue-500 dark:text-blue-400 animate-spin"
           strokeWidth={2}
           aria-label="In progress"
         />
@@ -322,7 +322,7 @@ function StatusIcon({ status }: { status: ServiceStatus }) {
       return (
         <HugeiconsIcon
           icon={CheckmarkCircle02Icon}
-          className="size-4 text-green-500"
+          className="size-4 text-green-500 dark:text-green-400"
           strokeWidth={2}
           aria-label="Complete"
         />

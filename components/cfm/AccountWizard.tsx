@@ -453,7 +453,7 @@ export function AccountWizard({ open, onOpenChange, onAccountCreated }: AccountW
                   <div
                     className={`rounded-md px-3 py-2 text-xs ${
                       testResult.success
-                        ? "bg-green-500/10 text-green-700 dark:text-green-400"
+                        ? "bg-green-500/10 text-green-700 dark:text-green-300"
                         : "bg-destructive/10 text-destructive"
                     }`}
                   >

@@ -204,14 +204,14 @@ export function CspScanProgress({
                   <HugeiconsIcon
                     icon={CheckmarkCircle02Icon}
                     strokeWidth={2}
-                    className="size-4 text-green-500"
+                    className="size-4 text-green-500 dark:text-green-400"
                   />
                 )}
                 {cat.status === "failed" && (
                   <HugeiconsIcon
                     icon={Cancel01Icon}
                     strokeWidth={2}
-                    className="size-4 text-red-500"
+                    className="size-4 text-red-500 dark:text-red-400"
                   />
                 )}
                 {cat.status === "pending" && (
@@ -231,7 +231,7 @@ export function CspScanProgress({
                   </span>
                 )}
                 {cat.status === "failed" && cat.error && (
-                  <span className="text-xs text-red-500">{cat.error}</span>
+                  <span className="text-xs text-red-500 dark:text-red-400">{cat.error}</span>
                 )}
               </div>
             ))}

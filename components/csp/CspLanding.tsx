@@ -146,7 +146,7 @@ export function CspLanding({ accounts }: CspLandingProps) {
                       <div className="flex h-2 rounded-full overflow-hidden bg-muted">
                         {sb.critical > 0 && (
                           <div
-                            className="bg-red-500"
+                            className="bg-red-500 dark:bg-red-400"
                             style={{
                               width: `${(sb.critical / total) * 100}%`,
                             }}
@@ -154,7 +154,7 @@ export function CspLanding({ accounts }: CspLandingProps) {
                         )}
                         {sb.high > 0 && (
                           <div
-                            className="bg-orange-500"
+                            className="bg-orange-500 dark:bg-orange-400"
                             style={{
                               width: `${(sb.high / total) * 100}%`,
                             }}
@@ -162,7 +162,7 @@ export function CspLanding({ accounts }: CspLandingProps) {
                         )}
                         {sb.medium > 0 && (
                           <div
-                            className="bg-yellow-500"
+                            className="bg-yellow-500 dark:bg-yellow-400"
                             style={{
                               width: `${(sb.medium / total) * 100}%`,
                             }}
@@ -170,7 +170,7 @@ export function CspLanding({ accounts }: CspLandingProps) {
                         )}
                         {sb.low > 0 && (
                           <div
-                            className="bg-blue-400"
+                            className="bg-blue-400 dark:bg-blue-300"
                             style={{
                               width: `${(sb.low / total) * 100}%`,
                             }}

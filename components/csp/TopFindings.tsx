@@ -19,13 +19,13 @@ interface TopFindingsProps {
 }
 
 const SERVICE_ICONS: Record<string, { icon: IconSvgElement; color: string }> = {
-  IAM: { icon: UserIcon, color: "text-violet-600" },
-  EC2: { icon: Wifi01Icon, color: "text-blue-600" },
-  VPC: { icon: Wifi01Icon, color: "text-blue-600" },
-  S3: { icon: FolderIcon, color: "text-green-600" },
-  CloudTrail: { icon: CloudIcon, color: "text-cyan-600" },
-  Config: { icon: CloudIcon, color: "text-cyan-600" },
-  AccessAnalyzer: { icon: ShieldIcon, color: "text-orange-600" },
+  IAM: { icon: UserIcon, color: "text-violet-600 dark:text-violet-400" },
+  EC2: { icon: Wifi01Icon, color: "text-blue-600 dark:text-blue-400" },
+  VPC: { icon: Wifi01Icon, color: "text-blue-600 dark:text-blue-400" },
+  S3: { icon: FolderIcon, color: "text-green-600 dark:text-green-400" },
+  CloudTrail: { icon: CloudIcon, color: "text-cyan-600 dark:text-cyan-400" },
+  Config: { icon: CloudIcon, color: "text-cyan-600 dark:text-cyan-400" },
+  AccessAnalyzer: { icon: ShieldIcon, color: "text-orange-600 dark:text-orange-400" },
 };
 
 function severityColor(severity: string) {

@@ -64,6 +64,20 @@
       "when": 1775673600000,
       "tag": "0008_savings_tracking_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1775481338005,
+      "tag": "0009_parched_eddie_brock",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1775483295311,
+      "tag": "0010_clear_electro",
+      "breakpoints": true
     }
   ]
 }

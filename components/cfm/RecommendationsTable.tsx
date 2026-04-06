@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LifecycleStatusBadge } from "./LifecycleStatusBadge";
 import { LifecycleActions } from "./LifecycleActions";
+import { AnnotationPopover } from "@/components/annotations/AnnotationPopover";
 import type {
   CfmPriority,
   CfmEffort,
@@ -230,6 +231,7 @@ export function RecommendationsTable({ recommendations, accountId }: Recommendat
               Effort{sortIndicator("effort")}
             </TableHead>
             <TableHead className="w-[140px]">Action</TableHead>
+            <TableHead className="w-[50px]"></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -276,6 +278,9 @@ export function RecommendationsTable({ recommendations, accountId }: Recommendat
                   ) : (
                     <span className="text-xs text-muted-foreground">—</span>
                   )}
+                </TableCell>
+                <TableCell>
+                  <AnnotationPopover targetType="cfm_recommendation" targetId={rec.id} />
                 </TableCell>
               </TableRow>
             );

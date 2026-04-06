@@ -12,6 +12,10 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts"
+import {
+  renderAnnotationMarkers,
+  type ChartAnnotation,
+} from "@/components/annotations/AnnotationMarker"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 
@@ -40,6 +44,8 @@ interface ForecastResponse {
 interface ForecastChartProps {
   accountId: string
   defaultMetric?: ForecastMetric
+  /** Optional annotations to render as flag markers on the chart timeline */
+  annotations?: ChartAnnotation[]
 }
 
 const metricLabels: Record<ForecastMetric, string> = {
@@ -57,6 +63,7 @@ const horizonOptions = [
 export function ForecastChart({
   accountId,
   defaultMetric = "spend",
+  annotations,
 }: ForecastChartProps) {
   const [metric, setMetric] = useState<ForecastMetric>(defaultMetric)
   const [horizon, setHorizon] = useState(30)
@@ -215,21 +222,30 @@ export function ForecastChart({
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
               <XAxis
                 dataKey="date"
-                tick={{ fontSize: 10 }}
+                tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+                stroke="var(--border)"
                 tickFormatter={(v) => {
                   const d = new Date(v)
                   return `${d.getMonth() + 1}/${d.getDate()}`
                 }}
               />
               <YAxis
-                tick={{ fontSize: 10 }}
+                tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+                stroke="var(--border)"
                 width={50}
                 tickFormatter={(v) =>
                   metric === "spend" ? `$${Number(v).toLocaleString()}` : String(Math.round(v))
                 }
               />
               <Tooltip
-                contentStyle={{ fontSize: 12, borderRadius: 8 }}
+                contentStyle={{
+                  fontSize: 12,
+                  borderRadius: 8,
+                  backgroundColor: "var(--popover)",
+                  borderColor: "var(--border)",
+                  color: "var(--popover-foreground)",
+                }}
+                labelStyle={{ color: "var(--muted-foreground)" }}
                 labelFormatter={(v) => new Date(v).toLocaleDateString()}
                 formatter={(value, name) => {
                   const num = Number(value ?? 0)
@@ -240,7 +256,7 @@ export function ForecastChart({
                   return [formatted, name]
                 }}
               />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Legend wrapperStyle={{ fontSize: 11, color: "var(--muted-foreground)" }} />
               <Line
                 type="monotone"
                 dataKey="history"
@@ -262,6 +278,7 @@ export function ForecastChart({
                 name="Forecast"
                 connectNulls={false}
               />
+              {annotations && renderAnnotationMarkers({ annotations, dataKey: "date" })}
             </LineChart>
           </ResponsiveContainer>
         ) : (

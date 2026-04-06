@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Delete02Icon, PencilEdit01Icon, RepeatIcon } from "@hugeicons/core-free-icons";
+import { AnnotationPopover } from "@/components/annotations/AnnotationPopover";
 import type { SerializedCfmAccount } from "./CfmLanding";
 
 interface AccountCardProps {
@@ -86,6 +87,7 @@ export function AccountCard({ account, totalSavings, onReanalyze, onEdit, onDele
           <HugeiconsIcon icon={PencilEdit01Icon} data-icon="inline-start" strokeWidth={2} />
           Edit
         </Button>
+        <AnnotationPopover targetType="cfm_scan" targetId={account.id} />
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button variant="ghost" size="xs" aria-label="Delete account" disabled={deleting}>

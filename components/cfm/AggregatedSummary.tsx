@@ -69,7 +69,7 @@ export function AggregatedSummary({ stats }: { stats: AggregatedStats }) {
         icon={AnalyticsUpIcon}
         label="Potential Savings"
         value={formatCurrency(stats.totalPotentialSavings)}
-        className="text-green-600"
+        className="text-green-600 dark:text-green-400"
       />
       <StatCard
         icon={AiInnovation01Icon}

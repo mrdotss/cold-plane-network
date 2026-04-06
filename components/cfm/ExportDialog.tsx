@@ -261,7 +261,7 @@ function StatusIndicator({ status }: { status: DownloadStatus }) {
     case "loading":
       return <HugeiconsIcon icon={Loading03Icon} className="size-4 animate-spin text-primary" strokeWidth={2} />;
     case "success":
-      return <HugeiconsIcon icon={CheckmarkCircle01Icon} className="size-4 text-green-600" strokeWidth={2} />;
+      return <HugeiconsIcon icon={CheckmarkCircle01Icon} className="size-4 text-green-600 dark:text-green-400" strokeWidth={2} />;
     case "error":
       return <HugeiconsIcon icon={Cancel01Icon} className="size-4 text-destructive" strokeWidth={2} />;
     default:

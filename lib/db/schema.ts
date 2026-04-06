@@ -565,3 +565,47 @@ export const digestSchedules = pgTable(
     index("idx_digest_schedules_enabled").on(t.enabled, t.lastRunAt),
   ],
 );
+
+
+// ─── Saved Views (Phase 5) ──────────────────────────────────────────────────
+
+export const savedViews = pgTable(
+  "saved_views",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id),
+    name: text("name").notNull(),
+    feature: varchar("feature", { length: 10 }).notNull(),
+    filters: jsonb("filters").notNull().default("{}"),
+    sortBy: varchar("sort_by", { length: 50 }),
+    sortOrder: varchar("sort_order", { length: 4 }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_saved_views_user").on(t.userId),
+  ],
+);
+
+// ─── Annotations (Phase 5) ──────────────────────────────────────────────────
+
+export const annotations = pgTable(
+  "annotations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id),
+    targetType: varchar("target_type", { length: 20 }).notNull(),
+    targetId: uuid("target_id").notNull(),
+    content: text("content").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_annotations_target").on(t.targetType, t.targetId),
+    index("idx_annotations_user").on(t.userId),
+  ],
+);

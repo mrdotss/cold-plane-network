@@ -27,27 +27,27 @@ const CATEGORY_ICONS: Record<
 > = {
   identity_access: {
     icon: UserIcon,
-    color: "text-violet-600",
+    color: "text-violet-600 dark:text-violet-400",
     bg: "bg-violet-100 dark:bg-violet-950",
   },
   network: {
     icon: Wifi01Icon,
-    color: "text-blue-600",
+    color: "text-blue-600 dark:text-blue-400",
     bg: "bg-blue-100 dark:bg-blue-950",
   },
   data_protection: {
     icon: FolderIcon,
-    color: "text-green-600",
+    color: "text-green-600 dark:text-green-400",
     bg: "bg-green-100 dark:bg-green-950",
   },
   logging: {
     icon: CloudIcon,
-    color: "text-cyan-600",
+    color: "text-cyan-600 dark:text-cyan-400",
     bg: "bg-cyan-100 dark:bg-cyan-950",
   },
   external_access: {
     icon: ShieldIcon,
-    color: "text-orange-600",
+    color: "text-orange-600 dark:text-orange-400",
     bg: "bg-orange-100 dark:bg-orange-950",
   },
 };
@@ -99,25 +99,25 @@ export function CategoryBreakdown({
                   <div className="flex h-2 rounded-full overflow-hidden mb-2">
                     {critical > 0 && (
                       <div
-                        className="bg-red-500"
+                        className="bg-red-500 dark:bg-red-400"
                         style={{ width: `${(critical / count) * 100}%` }}
                       />
                     )}
                     {high > 0 && (
                       <div
-                        className="bg-orange-500"
+                        className="bg-orange-500 dark:bg-orange-400"
                         style={{ width: `${(high / count) * 100}%` }}
                       />
                     )}
                     {medium > 0 && (
                       <div
-                        className="bg-yellow-500"
+                        className="bg-yellow-500 dark:bg-yellow-400"
                         style={{ width: `${(medium / count) * 100}%` }}
                       />
                     )}
                     {low > 0 && (
                       <div
-                        className="bg-blue-400"
+                        className="bg-blue-400 dark:bg-blue-300"
                         style={{ width: `${(low / count) * 100}%` }}
                       />
                     )}

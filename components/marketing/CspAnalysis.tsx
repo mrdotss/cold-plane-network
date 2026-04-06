@@ -118,7 +118,7 @@ export function CspAnalysis() {
                 <div className="text-sm font-medium text-muted-foreground">
                   Security Score
                 </div>
-                <div className="text-4xl font-bold text-green-500">87</div>
+                <div className="text-4xl font-bold text-green-600 dark:text-green-400">87</div>
                 <div className="text-xs text-muted-foreground">/ 100</div>
               </div>
               <div className="grid grid-cols-4 gap-4 text-center">
